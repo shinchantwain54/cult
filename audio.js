@@ -5,7 +5,7 @@ window.cultAudio = (() => {
   let started = false, muted = true, power = 0.3, lastPower = -1;
   let volume = 0.7;
   try { const v = parseFloat(localStorage.getItem('cultVolume')); if (!isNaN(v)) volume = Math.min(1, Math.max(0, v)); } catch (e) {}
-  const masterLevel = () => 1.2 * volume * volume; // squared for a natural-feeling curve
+  const masterLevel = () => 1.2 * volume * volume * blast; // squared for a natural-feeling curve
   let nextTime = 0, step = 0, schedTimer = null, pluckTimer = null, lastHover = 0;
 
   // D minor pentatonic across two octaves: guqin-like register
@@ -53,12 +53,15 @@ window.cultAudio = (() => {
     ksCache.set(freq, b);
     return b;
   }
-  // route a node to the dry bus and the reverb
+  // route a node to the dry bus and the reverb.
+  // Normal sounds go through `bed` (which the finale can duck); finale sounds use the fx path.
+  let bed, fxReverb, routeFx = false, blast = 1, tension, tensionFilter, tensionLfo;
   function send(node, wet = 0.5) {
-    node.connect(master);
+    node.connect(routeFx ? master : bed);
     const g = ctx.createGain(); g.gain.value = wet;
-    node.connect(g); g.connect(reverb);
+    node.connect(g); g.connect(routeFx ? fxReverb : reverb);
   }
+  function onFx(fn) { routeFx = true; try { fn(); } finally { routeFx = false; } }
   function osc(type, freq, detune = 0) {
     const o = ctx.createOscillator();
     o.type = type; o.frequency.value = freq; o.detune.value = detune;
@@ -71,11 +74,32 @@ window.cultAudio = (() => {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -16; comp.ratio.value = 4;
     master.connect(comp); comp.connect(ctx.destination);
+    bed = ctx.createGain(); bed.gain.value = 1; bed.connect(master);
 
-    reverb = ctx.createConvolver(); reverb.buffer = makeImpulse(5, 2.6);
+    const ir = makeImpulse(5, 2.6);
+    reverb = ctx.createConvolver(); reverb.buffer = ir;
     const rv = ctx.createGain(); rv.gain.value = 0.6;
-    reverb.connect(rv); rv.connect(master);
+    reverb.connect(rv); rv.connect(bed);
+    fxReverb = ctx.createConvolver(); fxReverb.buffer = ir;
+    const fxRv = ctx.createGain(); fxRv.gain.value = 0.7;
+    fxReverb.connect(fxRv); fxRv.connect(master);
     noise = makeNoise(2);
+
+    // --- Tension: tremolo strings that climb as the oath combo nears 100
+    tensionFilter = ctx.createBiquadFilter(); tensionFilter.type = 'bandpass';
+    tensionFilter.frequency.value = 900; tensionFilter.Q.value = 0.9;
+    const tremolo = ctx.createGain(); tremolo.gain.value = 0.5;
+    tensionLfo = osc('sine', 6);
+    const lfoAmt = ctx.createGain(); lfoAmt.gain.value = 0.5;
+    tensionLfo.connect(lfoAmt); lfoAmt.connect(tremolo.gain);
+    tension = ctx.createGain(); tension.gain.value = 0;
+    [[293.66, -6], [293.66, 7], [440, 0], [587.33, 4]].forEach(([f, d]) => {
+      const o = osc('sawtooth', f, d); o.connect(tensionFilter);
+      o.frequency.value = f; o._base = f;
+      (tension._oscs = tension._oscs || []).push(o);
+    });
+    tensionFilter.connect(tremolo); tremolo.connect(tension);
+    onFx(() => send(tension, 0.5));
 
     // --- Abyssal drone (D)
     droneFilter = ctx.createBiquadFilter();
@@ -184,7 +208,7 @@ window.cultAudio = (() => {
     }
   }
   function pluckLoop() {
-    if (!muted) {
+    if (!muted && !finaleOn) {
       const i = Math.floor(Math.random() * SCALE.length);
       pluck(SCALE[i]);
       if (Math.random() < 0.4) { // short melodic answer
@@ -259,10 +283,21 @@ window.cultAudio = (() => {
     [0, 0.18, 0.36, 0.5, 0.62, 0.72].forEach((d, k) => drum(t + d, 0.9 - k * 0.06, 0.9));
     [293.66, 220, 174.61, 146.83].forEach((f, k) => pluck(f, t + 0.9 + k * 0.12, 0.3, k === 3));
   }
+  // 0..1 build-up toward the 100th strike: strings rise in pitch, speed and volume
+  function setTension(x) {
+    if (!ctx) return;
+    const t = now(), k = Math.max(0, Math.min(1, x));
+    tension.gain.setTargetAtTime(k < 0.05 ? 0 : 0.015 + k * k * 0.11, t, k ? 0.15 : 0.6);
+    tensionLfo.frequency.setTargetAtTime(6 + k * 12, t, 0.2);
+    tensionFilter.frequency.setTargetAtTime(700 + k * 2600, t, 0.2);
+    tension._oscs.forEach(o => o.frequency.setTargetAtTime(o._base * Math.pow(2, k * 10 / 12), t, 0.2));
+  }
+
   // repeated oath strikes: everything climbs with the combo count
   function oathHit(c, tierUp) {
     if (!ctx || muted) return;
     const t = now(), lv = Math.min(c, 20);
+    setTension(c / 100);
     drum(t, Math.min(0.45 + lv * 0.035, 1), 0.85 + lv * 0.04);
     if (lv >= 4) drum(t + 0.07, 0.4 + lv * 0.02, 1.3 + lv * 0.03);
     if (lv >= 8) rim(t + 0.035, 0.35);
@@ -278,8 +313,9 @@ window.cultAudio = (() => {
     n.connect(f); f.connect(g); send(g, 0.4); n.start(t, Math.random()); n.stop(t + 0.25);
     // riser whose pitch climbs with the combo
     const o = ctx.createOscillator(); o.type = 'sawtooth';
-    o.frequency.setValueAtTime(55 * (1 + lv * 0.12), t);
-    o.frequency.exponentialRampToValueAtTime(110 * (1 + lv * 0.12), t + 0.4);
+    const climb = (1 + lv * 0.12) * (1 + Math.min(c, 100) / 100 * 1.5);
+    o.frequency.setValueAtTime(55 * climb, t);
+    o.frequency.exponentialRampToValueAtTime(110 * climb, t + 0.4);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600 + lv * 120;
     const og = ctx.createGain();
     og.gain.setValueAtTime(0.0001, t);
@@ -295,6 +331,114 @@ window.cultAudio = (() => {
       [0, 0.12, 0.24].forEach(d => drum(t + d, 0.9, 0.8));
     }
   }
+  /* ---------- The 100th strike: the Heavenly Demon's sword ---------- */
+  let finaleOn = false;
+  // time stops: the music drains away and the world inhales
+  function finaleStart() {
+    if (!ctx || muted) return;
+    finaleOn = true;
+    const t = now();
+    setTension(1);
+    tension.gain.setTargetAtTime(0, t + 0.25, 0.08);
+    bed.gain.cancelScheduledValues(t);
+    bed.gain.setTargetAtTime(0.05, t, 0.08);
+    onFx(() => {
+      // one last heartbeat
+      drum(t + 0.02, 0.9, 0.7); drum(t + 0.3, 0.6, 0.7);
+      // reverse swell: hiss rising into the cut
+      const n = ctx.createBufferSource(); n.buffer = noise; n.loop = true;
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass';
+      hp.frequency.setValueAtTime(5000, t); hp.frequency.exponentialRampToValueAtTime(900, t + 0.7);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.68);
+      g.gain.linearRampToValueAtTime(0, t + 0.72);
+      n.connect(hp); hp.connect(g); send(g, 0.3); n.start(t); n.stop(t + 0.75);
+    });
+  }
+  // one sword stroke: air ripped open plus the ring of demonic steel
+  function slash(power = 1) {
+    if (!ctx || muted) return;
+    const t = now();
+    onFx(() => {
+      const n = ctx.createBufferSource(); n.buffer = noise;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.8;
+      bp.frequency.setValueAtTime(4200, t); bp.frequency.exponentialRampToValueAtTime(350, t + 0.24 * power);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9 * power, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32 * power);
+      n.connect(bp); bp.connect(g); send(g, 0.45); n.start(t, Math.random()); n.stop(t + 0.4 * power);
+      [2380, 3170, 4410, 5930, 7400].forEach((f, i) => {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(f * 1.04, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.6);
+        const og = ctx.createGain();
+        og.gain.setValueAtTime(0.0001, t + 0.02);
+        og.gain.exponentialRampToValueAtTime(0.09 * power / (i + 1), t + 0.03);
+        og.gain.exponentialRampToValueAtTime(0.0001, t + 1.4 * power);
+        o.connect(og); send(og, 0.7); o.start(t); o.stop(t + 1.5 * power);
+      });
+      drum(t + 0.04, Math.min(0.7 * power, 1), 0.75);
+    });
+  }
+  // the final cut lands: everything at once, at peak volume
+  function finaleImpact() {
+    if (!ctx || muted) return;
+    const t = now();
+    bed.gain.cancelScheduledValues(t);
+    bed.gain.setTargetAtTime(1, t + 0.05, 0.3);
+    blast = 1.6;
+    master.gain.cancelScheduledValues(t);
+    master.gain.setTargetAtTime(masterLevel(), t, 0.02);
+    slash(1.6);
+    onFx(() => {
+      // sub drop
+      const sub = ctx.createOscillator(); sub.type = 'sine';
+      sub.frequency.setValueAtTime(90, t); sub.frequency.exponentialRampToValueAtTime(22, t + 2.6);
+      const sg = ctx.createGain();
+      sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(1.0, t + 0.02);
+      sg.gain.exponentialRampToValueAtTime(0.0001, t + 3);
+      sub.connect(sg); send(sg, 0.2); sub.start(t); sub.stop(t + 3.1);
+      // explosion: noise through a closing lowpass
+      const n = ctx.createBufferSource(); n.buffer = noise; n.loop = true;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(7000, t); lp.frequency.exponentialRampToValueAtTime(180, t + 3);
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.7, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
+      n.connect(lp); lp.connect(ng); send(ng, 0.8); n.start(t); n.stop(t + 3.5);
+      // giant gongs
+      gong(t, 1.0, 36, 12);
+      gong(t + 0.02, 0.5, 54, 10);
+      // demonic power chord opening and closing
+      const pf = ctx.createBiquadFilter(); pf.type = 'lowpass'; pf.Q.value = 6;
+      pf.frequency.setValueAtTime(200, t); pf.frequency.exponentialRampToValueAtTime(3200, t + 0.5);
+      pf.frequency.exponentialRampToValueAtTime(300, t + 4.5);
+      const pg = ctx.createGain();
+      pg.gain.setValueAtTime(0.0001, t); pg.gain.exponentialRampToValueAtTime(0.14, t + 0.05);
+      pg.gain.exponentialRampToValueAtTime(0.0001, t + 5);
+      [36.71, 55, 73.42, 110, 174.61, 220].forEach((f, i) => [-10, 10].forEach(d => {
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.value = f; o.detune.value = d + i;
+        o.connect(pf); o.start(t); o.stop(t + 5.1);
+      }));
+      pf.connect(pg); send(pg, 0.6);
+      // war-drum barrage, accelerating then slowing
+      let dt = 0;
+      for (let k = 0; k < 16; k++) { drum(t + 0.1 + dt, 1 - k * 0.04, 0.8 + (k % 3) * 0.15); dt += 0.06 + Math.abs(k - 8) * 0.015; }
+      // descending answer on the strings
+      [587.33, 440, 349.23, 293.66, 220, 146.83].forEach((f, k) => pluck(f, t + 1.2 + k * 0.1, 0.4, k === 5));
+    });
+    choirGain.gain.cancelScheduledValues(t);
+    choirGain.gain.setTargetAtTime(0.28, t, 0.05);
+    choirGain.gain.setTargetAtTime(0.06, t + 2.5, 1.5);
+  }
+  function finaleEnd() {
+    finaleOn = false;
+    blast = 1;
+    if (!ctx) return;
+    setTension(0);
+    if (!muted) { master.gain.cancelScheduledValues(now()); master.gain.setTargetAtTime(masterLevel(), now(), 1.2); }
+    bed.gain.cancelScheduledValues(now()); bed.gain.setTargetAtTime(1, now(), 0.4);
+  }
+
   function hover() {
     if (!ctx || muted) return;
     const t = performance.now();
@@ -323,5 +467,5 @@ window.cultAudio = (() => {
     document.hidden ? ctx.suspend() : ctx.resume();
   });
 
-  return { start, stop, toggle, setVolume, get volume() { return volume; }, setPower, section, doctrine, oath, oathHit, hover, get muted() { return muted; } };
+  return { start, stop, toggle, setVolume, get volume() { return volume; }, setPower, section, doctrine, oath, oathHit, setTension, finaleStart, slash, finaleImpact, finaleEnd, hover, get muted() { return muted; } };
 })();

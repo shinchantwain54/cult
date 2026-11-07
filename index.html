@@ -190,11 +190,38 @@ footer{position:relative;z-index:3;text-align:center;padding:40px 20px 50px;font
 
 /* Blood oath combo */
 #blood{position:fixed;inset:0;width:100%;height:100%;z-index:30;pointer-events:none}
-#combo{height:80px;margin-top:20px;font-family:Cinzel,serif;font-size:22px;letter-spacing:.2em;color:#ffb39a;opacity:0;transition:opacity .6s;user-select:none}
+#combo{min-height:80px;margin-top:20px;font-family:Cinzel,serif;font-size:22px;letter-spacing:.2em;color:#ffb39a;opacity:0;transition:opacity .6s;user-select:none}
 #combo.show{opacity:1}
 #combo .x{font-family:"Ma Shan Zheng",serif;font-size:58px;color:var(--blood);text-shadow:0 0 26px var(--blood);display:inline-block;vertical-align:middle;margin-right:6px}
 #combo .pop{animation:pop .35s cubic-bezier(.2,1.6,.4,1)}
 @keyframes pop{from{transform:scale(1.9);opacity:.3}}
+#combo .meter{display:block;width:220px;height:2px;margin:10px auto 0;background:rgba(255,255,255,.1);position:relative;overflow:hidden}
+#combo .meter i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--blood),var(--ember),#fff0e0);box-shadow:0 0 12px var(--ember)}
+#combo .goal{display:block;font-size:10px;letter-spacing:.4em;color:var(--muted);margin-top:8px}
+
+/* Sword finale */
+#finale{position:fixed;inset:0;z-index:35;pointer-events:none;opacity:0;
+  background:radial-gradient(ellipse at center,rgba(20,0,2,.82),rgba(0,0,0,.97));transition:opacity .25s}
+#finale.on{opacity:1}
+#finale.lift{transition:opacity 2.2s ease}
+#slash{position:fixed;inset:0;width:100%;height:100%;z-index:38;pointer-events:none}
+#finaleText{position:fixed;inset:0;z-index:42;pointer-events:none;display:flex;align-items:center;justify-content:center}
+#finaleText .zan{position:relative;font-family:"Ma Shan Zheng",serif;font-size:min(46vw,380px);line-height:1;opacity:0;color:#0a0000;
+  -webkit-text-stroke:2px rgba(255,40,30,.9);text-shadow:0 0 60px rgba(255,0,20,.8)}
+#finaleText .zan .half{display:block;transition:transform 1.4s cubic-bezier(.15,.8,.2,1),opacity 1.4s ease}
+#finaleText .zan .top{clip-path:polygon(0 0,100% 0,100% calc(50% - var(--d,0px)),0 calc(50% + var(--d,0px)))}
+#finaleText .zan .bot{position:absolute;inset:0;clip-path:polygon(0 calc(50% + var(--d,0px)),100% calc(50% - var(--d,0px)),100% 100%,0 100%)}
+#finaleText .zan.in{animation:zanIn .45s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes zanIn{from{opacity:0;transform:scale(1.6);filter:blur(16px)}to{opacity:1;transform:none;filter:none}}
+#finaleText .zan.cut .top{transform:translate(-9%,-14%) rotate(-4deg);opacity:0}
+#finaleText .zan.cut .bot{transform:translate(9%,14%) rotate(4deg);opacity:0}
+#finaleText .descend{position:absolute;text-align:center;opacity:0;transform:scale(.9);transition:opacity .6s,transform 2.5s cubic-bezier(.2,.7,.2,1)}
+#finaleText .descend.in{opacity:1;transform:none}
+#finaleText .descend.out{opacity:0;transition:opacity 1.2s}
+#finaleText .dh{font-family:"Ma Shan Zheng",serif;font-size:clamp(70px,13vw,190px);line-height:1;color:#ff2a1a;
+  text-shadow:0 0 30px #ff0018,0 0 90px rgba(255,0,24,.7),0 0 4px #fff}
+#finaleText .de{font-family:Cinzel,serif;font-weight:700;letter-spacing:.45em;font-size:clamp(11px,1.5vw,18px);color:#ffe2d2;margin-top:14px;text-shadow:0 0 14px #ff2010}
+.btn:disabled{cursor:default}
 .btn.raging{animation:rage .5s ease-in-out infinite;border-color:var(--ember)}
 @keyframes rage{50%{box-shadow:0 0 60px rgba(255,40,20,.85),inset 0 0 30px rgba(255,40,20,.4)}}
 main.shake{animation:shake .32s linear}
@@ -237,6 +264,12 @@ main.shake{animation:shake .32s linear}
 <div class="grain"></div>
 <div id="flash"></div>
 <canvas id="blood" aria-hidden="true"></canvas>
+<div id="finale" aria-hidden="true"></div>
+<canvas id="slash" aria-hidden="true"></canvas>
+<div id="finaleText" aria-live="polite">
+  <div class="zan"><span class="half top">斩</span><span class="half bot">斩</span></div>
+  <div class="descend"><div class="dh">天魔降臨</div><div class="de">THE HEAVENLY DEMON HAS DESCENDED</div></div>
+</div>
 
 <nav>
   <a class="mark" href="#hero">天魔</a>
@@ -374,6 +407,7 @@ main.shake{animation:shake .32s linear}
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
   renderer.setClearColor(0x050102);
+  renderer.localClippingEnabled = true;
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x0a0203, 0.035);
@@ -442,7 +476,9 @@ main.shake{animation:shake .32s linear}
     }`;
   const coreMat = new THREE.ShaderMaterial({
     uniforms: coreUniforms,
+    clipping: true,
     vertexShader: noise + `
+      #include <clipping_planes_pars_vertex>
       uniform float uTime; uniform float uPower;
       varying float vN; varying vec3 vNormal; varying vec3 vView;
       void main(){
@@ -450,14 +486,17 @@ main.shake{animation:shake .32s linear}
         float n2 = snoise(normal*4.0 - vec3(uTime*.6))*.35;
         vN = n + n2;
         vec3 p = position + normal * (vN * (.14 + uPower*.16));
-        vec4 mv = modelViewMatrix * vec4(p,1.);
-        vNormal = normalize(normalMatrix*normal); vView = normalize(-mv.xyz);
-        gl_Position = projectionMatrix * mv;
+        vec4 mvPosition = modelViewMatrix * vec4(p,1.);
+        vNormal = normalize(normalMatrix*normal); vView = normalize(-mvPosition.xyz);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <clipping_planes_vertex>
       }`,
     fragmentShader: `
+      #include <clipping_planes_pars_fragment>
       uniform float uTime; uniform float uPower;
       varying float vN; varying vec3 vNormal; varying vec3 vView;
       void main(){
+        #include <clipping_planes_fragment>
         float fres = pow(1. - max(dot(vNormal, vView), 0.), 2.2);
         vec3 black = vec3(.02,.0,.005);
         vec3 blood = vec3(.75,.03,.06);
@@ -476,6 +515,29 @@ main.shake{animation:shake .32s linear}
   coreGlow.scale.set(10,10,1);
   coreGroup.add(coreGlow);
   scene.add(coreGroup);
+
+  /* ---------- Split core: two clipped halves used by the sword finale ---------- */
+  const SPLIT_ANGLE = 7 * Math.PI/180;              // matches the final on-screen slash
+  const splitN = new THREE.Vector3(-Math.sin(SPLIT_ANGLE), Math.cos(SPLIT_ANGLE), 0);
+  const planeA = new THREE.Plane(), planeB = new THREE.Plane();
+  function halfMat(plane){
+    const m = coreMat.clone();
+    m.uniforms = coreUniforms;          // share time/power with the whole core
+    m.clippingPlanes = [plane];
+    m.side = THREE.DoubleSide;          // show the molten inside of the cut
+    return m;
+  }
+  const halfA = new THREE.Mesh(core.geometry, halfMat(planeA));
+  const halfB = new THREE.Mesh(core.geometry, halfMat(planeB));
+  halfA.visible = halfB.visible = false;
+  coreGroup.add(halfA, halfB);
+  // demonic energy leaking from the wound
+  const cutGlow = new THREE.Mesh(new THREE.PlaneGeometry(1,1),
+    new THREE.MeshBasicMaterial({map:glowTex('rgba(255,230,210,1)','rgba(255,20,30,.6)'), transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
+  cutGlow.rotation.z = SPLIT_ANGLE; cutGlow.visible = false;
+  coreGroup.add(cutGlow);
+  const split = {amount:0, target:0, active:false};
+  let timeScale = 1, ringBurst = 0;
 
   /* ---------- Rune rings ---------- */
   function runeTexture(text, color){
@@ -638,13 +700,15 @@ main.shake{animation:shake .32s linear}
     const nd = r > 6 ? Math.floor(rnd(1, 1 + r/6)) : (Math.random() < .2 ? 1 : 0);
     for (let i=0;i<nd;i++) drips.push({dx:rnd(-r*.7,r*.7), w:rnd(r*.12,r*.3)+1, len:0, max:rnd(r*2,r*9)+20, v:rnd(.3,1.2)});
     stains.push({x, y, r, blobs, drips, age:0, life:rnd(260,420)});
-    if (stains.length > 160) stains.splice(0, stains.length-160);
+    if (stains.length > 140) stains.splice(0, stains.length-140);
   }
   function splatter(x, y, power){
-    const n = Math.min(16 + power*7, 140);
+    power = Math.min(power, 14);          // past this the screen just drowns in red
+    // keep the number of airborne drops bounded however fast the button is smashed
+    const n = Math.min(16 + power*7, 110, Math.max(8, 500 - drops.length));
     for (let i=0;i<n;i++){
       const a = rnd(0,Math.PI*2), sp = rnd(2, 7 + power*1.2);
-      drops.push({x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - rnd(1,4), r:rnd(1.2, 2.6 + power*.25), life:rnd(18,45)});
+      drops.push({x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - rnd(1,4), r:rnd(1.2, 2.6 + power*.15), life:rnd(18,45)});
     }
     makeStain(x, y, Math.min(10 + power*2.5, 46));
     if (!bloodRunning){ bloodRunning = true; requestAnimationFrame(bloodLoop); }
@@ -688,19 +752,183 @@ main.shake{animation:shake .32s linear}
     [3,  'THE BLOOD BOILS'],
     [6,  'THE BLOOD DEMON AWAKENS'],
     [10, '血海 · A SEA OF BLOOD'],
-    [15, '天魔降臨 · THE HEAVENLY DEMON DESCENDS'],
+    [15, '天魔降臨 · THE HEAVENLY DEMON STIRS'],
+    [30, '魔氣 · DEMONIC QI FLOODS THE HALL'],
+    [50, '天魔劍 · THE DEMON BLADE HUNGERS'],
+    [75, '天地震動 · HEAVEN AND EARTH TREMBLE'],
+    [90, '斬 · ONE MORE BREATH…'],
   ];
+  const FINALE_AT = 100;
   const oathBtn = document.getElementById('oath'), comboEl = document.getElementById('combo');
   const mainEl = document.querySelector('main'), flashEl = document.getElementById('flash');
-  let combo = 0, comboTimer = null, sworn = false;
+  let combo = 0, comboTimer = null, sworn = false, inFinale = false;
   function flash(cls){ flashEl.classList.remove('go','soft'); void flashEl.offsetWidth; flashEl.classList.add(cls); }
+  function shakeMain(px){
+    if (reduceMotion) return;
+    mainEl.style.setProperty('--sh', px + 'px');
+    mainEl.classList.remove('shake'); void mainEl.offsetWidth; mainEl.classList.add('shake');
+  }
   function endCombo(){
+    if (inFinale) return;
     combo = 0;
+    cultAudio.setTension(0);
     comboEl.classList.remove('show');
     oathBtn.classList.remove('raging');
     oathBtn.textContent = 'YOUR BLOOD IS SWORN';
   }
+
+  /* ---------- Sword slash renderer ---------- */
+  const sc = document.getElementById('slash'), sx = sc.getContext('2d');
+  let slashes = [], sparks = [], slashRunning = false;
+  function sizeSlash(){
+    const d = Math.min(devicePixelRatio, 2);
+    sc.width = innerWidth*d; sc.height = innerHeight*d; sx.setTransform(d,0,0,d,0,0);
+  }
+  sizeSlash(); addEventListener('resize', sizeSlash);
+  // a crescent stroke along a curved path: fast leading edge, then the tail chases it closed
+  function addSlash(o){
+    const dx = o.x1-o.x0, dy = o.y1-o.y0, L = Math.hypot(dx,dy);
+    const nx = -dy/L, ny = dx/L;
+    slashes.push(Object.assign({
+      cx:(o.x0+o.x1)/2 + nx*o.bend, cy:(o.y0+o.y1)/2 + ny*o.bend,
+      t0:performance.now(), dur:130, life:520, w:26
+    }, o));
+    if (!slashRunning){ slashRunning = true; requestAnimationFrame(slashLoop); }
+  }
+  function bez(s,u){
+    const a = (1-u)*(1-u), b = 2*(1-u)*u, c = u*u;
+    return [a*s.x0 + b*s.cx + c*s.x1, a*s.y0 + b*s.cy + c*s.y1];
+  }
+  function bezN(s,u){
+    const tx = 2*(1-u)*(s.cx-s.x0) + 2*u*(s.x1-s.cx);
+    const ty = 2*(1-u)*(s.cy-s.y0) + 2*u*(s.y1-s.cy);
+    const l = Math.hypot(tx,ty) || 1;
+    return [-ty/l, tx/l, tx/l, ty/l];
+  }
+  function crescent(s, tail, head, outer, inner){
+    const N = 56, pts = [], back = [];
+    for (let i=0;i<=N;i++){
+      const u = tail + (head-tail)*i/N;
+      const [px,py] = bez(s,u), [nx,ny] = bezN(s,u);
+      const w = s.w * Math.pow(Math.sin(Math.PI*i/N), .7);
+      pts.push([px + nx*w*outer, py + ny*w*outer]);
+      back.push([px - nx*w*inner, py - ny*w*inner]);
+    }
+    sx.beginPath();
+    pts.forEach((p,i)=> i ? sx.lineTo(p[0],p[1]) : sx.moveTo(p[0],p[1]));
+    for (let i=back.length-1;i>=0;i--) sx.lineTo(back[i][0], back[i][1]);
+    sx.closePath(); sx.fill();
+  }
+  function slashLoop(now){
+    sx.clearRect(0,0,innerWidth,innerHeight);
+    sx.globalCompositeOperation = 'lighter';
+    for (let i=slashes.length-1;i>=0;i--){
+      const s = slashes[i], el = now - s.t0;
+      const head = 1 - Math.pow(1 - Math.min(el/s.dur, 1), 3);
+      const tp = el < s.dur ? 0 : Math.min((el - s.dur)/s.life, 1);
+      const tail = tp*tp;
+      if (tp >= 1){ slashes.splice(i,1); continue; }
+      const fade = 1 - tp*.6;
+      // outer demonic aura
+      sx.shadowBlur = 50; sx.shadowColor = 'rgba(255,0,24,1)';
+      sx.fillStyle = `rgba(150,0,18,${.55*fade})`; crescent(s, tail, head, 2.4, .5);
+      sx.shadowBlur = 20;
+      sx.fillStyle = `rgba(255,35,30,${.9*fade})`; crescent(s, tail, head, 1.25, .2);
+      sx.shadowBlur = 0;
+      sx.fillStyle = `rgba(255,236,220,${fade})`;  crescent(s, tail, head, .45, .05);
+      // sparks fly from the edge while it is still moving
+      if (head < 1 || el < s.dur + 60){
+        const [hx,hy] = bez(s, head), [nx,ny,tx,ty] = bezN(s, head);
+        for (let k=0;k<7;k++){
+          const sp = rnd(4,16), side = rnd(-.6,1.2);
+          sparks.push({x:hx, y:hy, vx:tx*sp + nx*side*sp*.6, vy:ty*sp + ny*side*sp*.6, life:rnd(14,32), max:32});
+        }
+      }
+    }
+    sx.strokeStyle = 'rgba(255,170,120,.9)'; sx.lineCap = 'round';
+    for (let i=sparks.length-1;i>=0;i--){
+      const p = sparks[i];
+      p.vx *= .93; p.vy = p.vy*.93 + .25; p.x += p.vx; p.y += p.vy; p.life--;
+      sx.globalAlpha = Math.max(p.life/p.max, 0);
+      sx.lineWidth = 1.6;
+      sx.beginPath(); sx.moveTo(p.x - p.vx*2, p.y - p.vy*2); sx.lineTo(p.x, p.y); sx.stroke();
+      if (p.life <= 0) sparks.splice(i,1);
+    }
+    sx.globalAlpha = 1; sx.globalCompositeOperation = 'source-over';
+    if (slashes.length || sparks.length) requestAnimationFrame(slashLoop);
+    else { slashRunning = false; sx.clearRect(0,0,innerWidth,innerHeight); }
+  }
+
+  /* ---------- The 100th strike: the Heavenly Demon's sword ---------- */
+  const finaleEl = document.getElementById('finale');
+  const zanEl = document.querySelector('#finaleText .zan'), descEl = document.querySelector('#finaleText .descend');
+  function finale(){
+    inFinale = true;
+    clearTimeout(comboTimer);
+    oathBtn.disabled = true;
+    const W = innerWidth, H = innerHeight, cx = W/2, cy = H/2;
+    const at = (ms, fn) => setTimeout(fn, reduceMotion ? ms*.6 : ms);
+
+    // 0ms: time stops and the world goes dark
+    cultAudio.finaleStart();
+    timeScale = .02; camShake = 0;
+    finaleEl.classList.remove('lift'); finaleEl.classList.add('on');
+    oathBtn.textContent = '天魔劍 · THE HEAVENLY DEMON DRAWS';
+    at(160, ()=>{
+      // match the split on the giant character to the final cut's angle
+      const r = zanEl.getBoundingClientRect();
+      zanEl.style.setProperty('--d', (Math.tan(SPLIT_ANGLE) * (r.width || 300)/2) + 'px');
+      zanEl.classList.remove('cut'); void zanEl.offsetWidth; zanEl.classList.add('in');
+    });
+    // first and second strokes: an X across the darkness
+    at(750, ()=>{
+      addSlash({x0:W*1.05, y0:-H*.05, x1:-W*.05, y1:H*1.02, bend:-W*.12, w:Math.min(W,H)*.035});
+      cultAudio.slash(1); shakeMain(8); camShake = .25;
+    });
+    at(1000, ()=>{
+      addSlash({x0:-W*.05, y0:-H*.02, x1:W*1.05, y1:H*1.05, bend:W*.12, w:Math.min(W,H)*.035});
+      cultAudio.slash(1.15); shakeMain(9); camShake = .3;
+    });
+    // the killing stroke: one horizontal cut through everything
+    at(1600, ()=>{
+      const t = Math.tan(SPLIT_ANGLE) * W*.55;
+      addSlash({x0:-W*.06, y0:cy + t, x1:W*1.06, y1:cy - t, bend:-H*.05, w:Math.min(W,H)*.055, dur:170, life:1500});
+      cultAudio.finaleImpact();
+      flash('go');
+      shakeMain(14); camShake = .9;
+      zanEl.classList.add('cut');
+      // the world cracks open
+      timeScale = 3.2; surge = 3; ringBurst = 1;
+      split.active = true; split.target = 1; split.amount = 0;
+      core.visible = false; halfA.visible = halfB.visible = cutGlow.visible = true;
+      for (let k=0;k<14;k++) setTimeout(()=>{
+        const u = rnd(0,1);
+        splatter(u*W, cy + t - u*2*t + rnd(-30,30), 8);
+      }, k*45);
+      finaleEl.classList.add('lift'); finaleEl.classList.remove('on');
+    });
+    at(2100, ()=>{ descEl.classList.remove('out'); descEl.classList.add('in'); });
+    // the core knits itself back together
+    at(4300, ()=>{ split.target = 0; timeScale = 1.4; });
+    at(5200, ()=>{
+      descEl.classList.add('out');
+      zanEl.classList.remove('in','cut');
+      timeScale = 1;
+      cultAudio.finaleEnd();
+    });
+    at(6400, ()=>{
+      descEl.classList.remove('in','out');
+      inFinale = false;
+      oathBtn.disabled = false;
+      combo = 0;
+      comboEl.classList.remove('show');
+      oathBtn.classList.remove('raging');
+      oathBtn.textContent = 'SWEAR AGAIN · 百';
+    });
+  }
+
   oathBtn.addEventListener('click', e=>{
+    if (inFinale) return;
     const r = oathBtn.getBoundingClientRect();
     const x = e.detail ? e.clientX : r.left + r.width/2;   // keyboard presses splash from the button centre
     const y = e.detail ? e.clientY : r.top + r.height/2;
@@ -733,16 +961,24 @@ main.shake{animation:shake .32s linear}
     }
     oathBtn.textContent = TIERS[ti][1];
     oathBtn.classList.toggle('raging', combo >= 6);
-    comboEl.innerHTML = `<span class="x pop">血</span>× ${combo}`;
+    const pct = Math.min(combo / FINALE_AT, 1) * 100;
+    comboEl.innerHTML = `<span class="x pop">血</span>× ${combo}` +
+      (combo >= 10 ? `<span class="meter"><i style="width:${pct}%"></i></span><span class="goal">${combo} / 百 · THE DEMON BLADE</span>` : '');
     comboEl.classList.add('show');
+    if (combo >= FINALE_AT) finale();
   });
 
   /* ---------- Loop ---------- */
   const clock = new THREE.Clock();
   const cur = sample(0);
-  let lastT = 0;
+  let lastT = 0, st = 0, emberT = 0;
+  const _p = new THREE.Vector3();
   function tick(){
-    const t = clock.getElapsedTime();
+    const real = clock.getElapsedTime();
+    const dt = Math.min(real - lastT, .1);
+    lastT = real;
+    st += dt * timeScale;       // scene time: stops when time stops, races after the cut
+    const t = st;
     const target = sample(scrollT);
     const k = .05;
     cur.cam = cur.cam.map((v,i)=>lerp(v,target.cam[i],k));
@@ -750,6 +986,7 @@ main.shake{animation:shake .32s linear}
     cur.power = lerp(cur.power, target.power, k);
     cur.rot = lerp(cur.rot, target.rot, k);
     surge *= .97;
+    ringBurst *= .96;
 
     mouse.x = lerp(mouse.x, mouse.tx, .05); mouse.y = lerp(mouse.y, mouse.ty, .05);
 
@@ -763,8 +1000,7 @@ main.shake{animation:shake .32s linear}
     const pw = cur.power + surge*1.5;
     cultAudio.setPower(pw);
     // advance the core's own clock so surges speed it up without jumping
-    coreUniforms.uTime.value += Math.min(t - lastT, .1) * (1 + surge*3);
-    lastT = t;
+    coreUniforms.uTime.value += dt * timeScale * (1 + surge*3);
     coreUniforms.uPower.value = pw;
     coreGroup.position.set(cur.core[0], cur.core[1] + Math.sin(t*.8)*.15, cur.core[2]);
     core.rotation.y = t*.15 + cur.rot; core.rotation.x = t*.07;
@@ -773,14 +1009,36 @@ main.shake{animation:shake .32s linear}
     coreGlow.scale.setScalar(6 + pw*3.5 + Math.sin(t*2.5)*.4);
     coreGlow.material.opacity = .35 + pw*.25;
 
+    // sword finale: the core falls apart along the cut, then knits back together
+    split.amount = lerp(split.amount, split.target, split.target ? .12 : .045);
+    if (split.active){
+      const off = split.amount * 1.9;
+      coreGroup.getWorldPosition(_p);
+      halfA.position.copy(splitN).multiplyScalar(off);
+      halfB.position.copy(splitN).multiplyScalar(-off);
+      halfA.rotation.copy(core.rotation); halfB.rotation.copy(core.rotation);
+      halfA.scale.copy(core.scale); halfB.scale.copy(core.scale);
+      planeA.setFromNormalAndCoplanarPoint(splitN, _p.clone().addScaledVector(splitN, off));
+      planeB.setFromNormalAndCoplanarPoint(splitN.clone().negate(), _p.clone().addScaledVector(splitN, -off));
+      cutGlow.scale.set(9 + split.amount*6, .25 + off*1.6, 1);
+      cutGlow.material.opacity = Math.min(1, split.amount*1.5);
+      if (!split.target && split.amount < .01){
+        split.active = false; core.visible = true;
+        halfA.visible = halfB.visible = cutGlow.visible = false;
+      }
+    }
+
     rings.forEach((r,i)=>{
-      r.inner.rotation.y = t*r.d.speed*(1+surge*6) + cur.rot*(i%2?-1:1);
+      r.ang = (r.ang || 0) + dt * timeScale * r.d.speed * (1 + surge*6);
+      r.inner.rotation.y = r.ang + cur.rot*(i%2?-1:1);
       r.mesh.rotation.z = r.d.tilt[2] + Math.sin(t*.3+i)*.15;
-      const rs = 1 + (pw-.4)*.12 + surge*.3;
+      const rs = (1 + (pw-.4)*.12 + surge*.3) * (1 + ringBurst*1.8);
       r.mesh.scale.setScalar(rs);
+      r.inner.material.opacity = 1 - Math.min(ringBurst, .85);
     });
 
-    emberMat.uniforms.uTime.value = t;
+    emberT += dt * timeScale;
+    emberMat.uniforms.uTime.value = emberT;
     emberMat.uniforms.uSpeed.value = 1 + pw*.6 + surge*4;
     mists.forEach((m,i)=>{ m.position.x = Math.sin(t*.05+i*1.7)*6; });
     mountains.forEach((m,i)=>{ m.position.x = -mouse.x*(i+1)*.8; });
