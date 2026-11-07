@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heavenly Demon Cult</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blood:#c4121f;
+  --ember:#ff5a1f;
+  --gold:#d9a441;
+  --ink:#070304;
+  --ash:#e9dcd2;
+  --muted:#a08e86;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--ink);color:var(--ash);font-family:"Cormorant Garamond",serif;font-size:19px;line-height:1.65;overflow-x:hidden}
+#bg{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.85) 100%)}
+.grain{position:fixed;inset:-50%;pointer-events:none;z-index:2;opacity:.06;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation:grain 1s steps(4) infinite}
+@keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-3%,2%)}50%{transform:translate(2%,-3%)}75%{transform:translate(-2%,-1%)}}
+main{position:relative;z-index:3}
+
+/* Loader */
+#loader{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity 1.2s ease,visibility 1.2s}
+#loader.done{opacity:0;visibility:hidden}
+#loader .glyph{font-family:"Ma Shan Zheng",serif;font-size:96px;color:var(--blood);text-shadow:0 0 30px var(--blood);animation:pulse 1.6s ease-in-out infinite}
+#loader .txt{font-family:Cinzel,serif;letter-spacing:.5em;font-size:12px;color:var(--muted)}
+@keyframes pulse{50%{opacity:.4;transform:scale(.94)}}
+#loader .enter{display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;pointer-events:none;transition:opacity 1s}
+#loader.ready .enter{opacity:1;pointer-events:auto}
+#loader.ready .glyph{animation-duration:3s}
+#loader .btn{margin-top:20px}
+.lnk{background:none;border:none;color:var(--muted);font-family:"Cormorant Garamond",serif;font-style:italic;font-size:16px;cursor:pointer;text-decoration:underline;text-underline-offset:4px}
+.lnk:hover{color:var(--ash)}
+
+/* Sound toggle */
+.sound{position:fixed;left:24px;bottom:22px;z-index:20;display:flex;align-items:stretch;
+  background:rgba(10,2,3,.6);border:1px solid rgba(196,18,31,.45);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);transition:.3s}
+.sound:hover{border-color:var(--ember);box-shadow:0 0 18px rgba(196,18,31,.4)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.vol{display:flex;align-items:center;padding:0 14px 0 4px;border-left:1px solid rgba(196,18,31,.3)}
+#vol{--p:70%;-webkit-appearance:none;appearance:none;width:96px;height:3px;cursor:pointer;outline:none;
+  background:linear-gradient(90deg,var(--blood),var(--ember) var(--p),rgba(255,255,255,.12) var(--p))}
+#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;transform:rotate(45deg);background:var(--ember);border:1px solid #ffd3a0;box-shadow:0 0 10px var(--ember)}
+#vol::-moz-range-thumb{width:10px;height:10px;border-radius:0;transform:rotate(45deg);background:var(--ember);border:1px solid #ffd3a0;box-shadow:0 0 10px var(--ember)}
+#vol:focus-visible{outline:1px solid var(--gold);outline-offset:6px}
+.sound.muted #vol{filter:grayscale(.8);opacity:.55}
+#snd{display:flex;align-items:center;gap:10px;background:none;border:none;color:var(--ash);
+  padding:9px 14px;font-family:Cinzel,serif;font-size:10px;letter-spacing:.3em;cursor:pointer;min-width:132px}
+#snd:hover{color:#ffd9c2}
+#snd .eq{display:flex;align-items:flex-end;gap:2px;height:12px}
+#snd .eq i{width:2px;height:3px;background:var(--blood);transition:height .3s}
+#snd.on .eq i{animation:eq 1s ease-in-out infinite}
+#snd.on .eq i:nth-child(2){animation-delay:-.3s}#snd.on .eq i:nth-child(3){animation-delay:-.6s}#snd.on .eq i:nth-child(4){animation-delay:-.15s}
+@keyframes eq{0%,100%{height:3px}50%{height:12px}}
+
+/* Nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:18px 32px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent)}
+nav .mark{font-family:"Ma Shan Zheng",serif;font-size:30px;color:var(--blood);text-decoration:none;text-shadow:0 0 12px rgba(196,18,31,.7)}
+nav ul{display:flex;gap:28px;list-style:none}
+nav a.l{font-family:Cinzel,serif;font-size:12px;letter-spacing:.25em;color:var(--ash);text-decoration:none;opacity:.7;transition:.3s}
+nav a.l:hover{opacity:1;color:var(--ember)}
+
+/* Sections */
+section{min-height:100vh;display:flex;align-items:center;padding:120px 8vw;position:relative}
+.wrap{max-width:1180px;margin:0 auto;width:100%}
+.right{justify-content:flex-end}
+.panel{max-width:560px}
+.kicker{font-family:Cinzel,serif;font-size:12px;letter-spacing:.45em;color:var(--ember);margin-bottom:14px;display:block}
+h2{font-family:Cinzel,serif;font-weight:900;font-size:clamp(34px,5vw,64px);line-height:1.05;letter-spacing:.04em;margin-bottom:22px;
+  background:linear-gradient(180deg,#fff2e8 0%,#e9b7a0 45%,var(--blood) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.han{font-family:"Ma Shan Zheng",serif;color:var(--blood);text-shadow:0 0 18px rgba(196,18,31,.6)}
+p{color:#d8c8bf;margin-bottom:16px}
+p em{color:var(--gold);font-style:italic}
+
+/* Hero */
+#hero{justify-content:center;text-align:center;flex-direction:column}
+.hero-han{font-family:"Ma Shan Zheng",serif;font-size:clamp(70px,13vw,180px);line-height:1;color:var(--blood);
+  text-shadow:0 0 40px rgba(196,18,31,.8),0 0 120px rgba(196,18,31,.4);letter-spacing:.08em}
+.hero-han span{display:inline-block;opacity:0;transform:translateY(40px) scale(1.3);filter:blur(12px);animation:ink 1.4s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes ink{to{opacity:1;transform:none;filter:none}}
+.hero-title{font-family:Cinzel,serif;font-weight:700;letter-spacing:.55em;font-size:clamp(13px,1.6vw,20px);margin-top:18px;color:var(--ash);opacity:0;animation:fade 2s 1.8s forwards}
+.hero-sub{font-style:italic;color:var(--muted);margin-top:14px;opacity:0;animation:fade 2s 2.4s forwards}
+.scroll-cue{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);font-family:Cinzel,serif;font-size:11px;letter-spacing:.4em;color:var(--muted);opacity:0;animation:fade 2s 3s forwards}
+.scroll-cue::after{content:"";display:block;width:1px;height:50px;margin:12px auto 0;background:linear-gradient(var(--blood),transparent);animation:drip 2s infinite}
+@keyframes drip{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+@keyframes fade{to{opacity:1}}
+
+/* Cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:30px}
+.card{position:relative;padding:26px 22px;border:1px solid rgba(196,18,31,.35);background:linear-gradient(160deg,rgba(40,4,8,.72),rgba(8,2,3,.6));
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:transform .5s,border-color .5s,box-shadow .5s;transform-style:preserve-3d}
+.card:hover{border-color:var(--ember);box-shadow:0 0 40px rgba(196,18,31,.35),inset 0 0 30px rgba(196,18,31,.15)}
+.card .big{font-family:"Ma Shan Zheng",serif;font-size:58px;line-height:1;color:var(--blood);text-shadow:0 0 18px rgba(196,18,31,.7);display:block;margin-bottom:10px}
+.card h3{font-family:Cinzel,serif;font-size:15px;letter-spacing:.2em;color:var(--ash);margin-bottom:8px}
+.card p{font-size:16px;margin:0;color:#bfaea6}
+.card::before,.card::after{content:"";position:absolute;width:14px;height:14px;border:1px solid var(--gold)}
+.card::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+.card::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+
+/* Hierarchy */
+.tiers{margin-top:30px;display:flex;flex-direction:column;gap:2px}
+.tier{display:grid;grid-template-columns:90px 1fr;gap:18px;align-items:center;padding:16px 18px;background:rgba(15,3,5,.6);border-left:2px solid var(--blood);transition:.4s}
+.tier:hover{background:rgba(60,6,12,.6);padding-left:28px}
+.tier .han{font-size:34px;text-align:center}
+.tier b{font-family:Cinzel,serif;letter-spacing:.15em;font-size:14px;display:block;color:var(--ash)}
+.tier small{color:#b39f96;font-size:15px}
+
+/* Doctrines */
+.doctrine{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:26px;margin-top:34px;align-items:start}
+.tablet{position:relative;display:grid;grid-template-columns:auto 1fr;gap:30px;padding:40px 34px;min-height:430px;
+  background:linear-gradient(170deg,rgba(30,6,9,.88),rgba(6,1,2,.85));border:1px solid rgba(217,164,65,.35);
+  box-shadow:inset 0 0 70px rgba(0,0,0,.85),0 30px 60px rgba(0,0,0,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.tablet::before{content:"";position:absolute;inset:9px;border:1px solid rgba(196,18,31,.3);pointer-events:none}
+.tablet::after{content:"律";position:absolute;right:18px;bottom:-14px;font-family:"Ma Shan Zheng",serif;font-size:150px;line-height:1;color:rgba(196,18,31,.07);pointer-events:none}
+.tab-han{writing-mode:vertical-rl;font-family:"Ma Shan Zheng",serif;font-size:clamp(56px,6vw,86px);line-height:1;letter-spacing:.06em;
+  color:var(--blood);text-shadow:0 0 24px rgba(196,18,31,.75);padding-right:26px;border-right:1px solid rgba(217,164,65,.25)}
+.tab-num{font-family:Cinzel,serif;font-size:12px;letter-spacing:.4em;color:var(--gold)}
+.tab-body h3{font-family:Cinzel,serif;font-weight:700;font-size:clamp(21px,2.3vw,30px);line-height:1.2;letter-spacing:.05em;color:#ffe6d6;margin:12px 0 16px}
+.tab-body p{font-size:18px}
+.tab-pen{border-top:1px solid rgba(196,18,31,.35);padding-top:14px;margin-top:20px}
+.tab-pen span{display:block;font-family:Cinzel,serif;font-size:10px;letter-spacing:.4em;color:var(--ember);margin-bottom:6px}
+.tab-pen em{color:#e58f80;font-size:17px}
+.ink{animation:inkIn .9s cubic-bezier(.2,.7,.2,1)}
+@keyframes inkIn{from{opacity:0;filter:blur(8px);transform:translateY(12px)}}
+.laws{list-style:none;display:flex;flex-direction:column;gap:2px}
+.laws button{width:100%;display:grid;grid-template-columns:42px 1fr;align-items:center;gap:12px;text-align:left;padding:11px 16px;
+  background:rgba(12,2,4,.62);border:none;border-left:2px solid rgba(196,18,31,.3);color:var(--ash);cursor:pointer;font:inherit;transition:.35s}
+.laws .n{font-family:"Ma Shan Zheng",serif;font-size:28px;line-height:1;color:var(--blood);text-align:center}
+.laws .t{font-family:Cinzel,serif;font-size:12.5px;letter-spacing:.13em}
+.laws button:hover{background:rgba(50,6,10,.68);padding-left:22px}
+.laws button:focus-visible{outline:1px solid var(--gold);outline-offset:-1px}
+.laws button[aria-pressed=true]{background:linear-gradient(90deg,rgba(150,10,20,.6),rgba(30,4,6,.62));border-left-color:var(--ember);box-shadow:inset 0 0 22px rgba(196,18,31,.28)}
+.laws button[aria-pressed=true] .n{color:#ffd3a0;text-shadow:0 0 12px var(--ember)}
+
+/* Cheonma */
+#cheonma .panel{max-width:620px}
+.title-han{font-family:"Ma Shan Zheng",serif;font-size:clamp(90px,14vw,200px);line-height:.9;color:var(--blood);text-shadow:0 0 50px rgba(196,18,31,.9)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:14px 26px;margin:26px 0}
+.stat label{font-family:Cinzel,serif;font-size:11px;letter-spacing:.3em;color:var(--muted)}
+.bar{height:3px;background:rgba(255,255,255,.08);margin-top:7px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blood),var(--ember),#ffd3a0);box-shadow:0 0 10px var(--ember);transition:width 2s cubic-bezier(.2,.7,.2,1)}
+.in .bar i{width:var(--w)}
+blockquote{border-left:2px solid var(--gold);padding:6px 0 6px 20px;font-style:italic;font-size:22px;color:var(--gold);margin-top:10px}
+
+/* Arts */
+.arts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:30px}
+.art{padding:28px;background:rgba(10,2,3,.65);border:1px solid rgba(217,164,65,.2);position:relative;overflow:hidden}
+.art::before{content:attr(data-han);position:absolute;right:-10px;bottom:-30px;font-family:"Ma Shan Zheng",serif;font-size:140px;color:rgba(196,18,31,.12);line-height:1;transition:.6s}
+.art:hover::before{color:rgba(196,18,31,.3);transform:scale(1.1) rotate(-6deg)}
+.art h3{font-family:Cinzel,serif;font-size:17px;letter-spacing:.12em;color:#ffd9c2;margin-bottom:4px}
+.art .rank{font-family:Cinzel,serif;font-size:11px;letter-spacing:.3em;color:var(--ember);display:block;margin-bottom:12px}
+.art p{font-size:16px;position:relative}
+
+/* Creed */
+#creed{justify-content:center;text-align:center}
+.creed-han{font-family:"Ma Shan Zheng",serif;font-size:clamp(54px,9vw,130px);line-height:1.15;color:var(--blood);text-shadow:0 0 40px rgba(196,18,31,.8)}
+.creed-en{font-family:Cinzel,serif;letter-spacing:.35em;font-size:clamp(12px,1.5vw,17px);margin-top:20px}
+.btn{display:inline-block;margin-top:40px;padding:16px 42px;font-family:Cinzel,serif;font-size:13px;letter-spacing:.4em;color:var(--ash);text-decoration:none;border:1px solid var(--blood);position:relative;overflow:hidden;transition:.4s;cursor:pointer;background:none}
+.btn::before{content:"";position:absolute;inset:0;background:var(--blood);transform:scaleX(0);transform-origin:left;transition:.5s cubic-bezier(.7,0,.2,1);z-index:-1}
+.btn:hover::before{transform:scaleX(1)}
+.btn:hover{box-shadow:0 0 40px rgba(196,18,31,.6)}
+footer{position:relative;z-index:3;text-align:center;padding:40px 20px 50px;font-family:Cinzel,serif;font-size:11px;letter-spacing:.3em;color:#6d5d57}
+
+/* Reveal */
+.rv{opacity:0;transform:translateY(50px);transition:opacity 1.2s ease,transform 1.2s cubic-bezier(.2,.7,.2,1)}
+.rv.in{opacity:1;transform:none}
+.rv.d1{transition-delay:.15s}.rv.d2{transition-delay:.3s}.rv.d3{transition-delay:.45s}
+
+/* Progress */
+#prog{position:fixed;right:24px;top:50%;transform:translateY(-50%);z-index:20;display:flex;flex-direction:column;gap:14px}
+#prog a{width:8px;height:8px;border:1px solid var(--blood);transform:rotate(45deg);display:block;transition:.3s}
+#prog a.on{background:var(--blood);box-shadow:0 0 12px var(--blood)}
+
+/* Flash on oath */
+#flash{position:fixed;inset:0;z-index:40;pointer-events:none;background:radial-gradient(circle,rgba(255,60,30,.9),rgba(120,0,0,.9));opacity:0}
+#flash.go{animation:flash 1.6s ease-out}
+@keyframes flash{0%{opacity:0}10%{opacity:1}100%{opacity:0}}
+#flash.soft{animation:flashSoft .6s ease-out}
+@keyframes flashSoft{0%{opacity:0}15%{opacity:.3}100%{opacity:0}}
+
+/* Blood oath combo */
+#blood{position:fixed;inset:0;width:100%;height:100%;z-index:30;pointer-events:none}
+#combo{height:80px;margin-top:20px;font-family:Cinzel,serif;font-size:22px;letter-spacing:.2em;color:#ffb39a;opacity:0;transition:opacity .6s;user-select:none}
+#combo.show{opacity:1}
+#combo .x{font-family:"Ma Shan Zheng",serif;font-size:58px;color:var(--blood);text-shadow:0 0 26px var(--blood);display:inline-block;vertical-align:middle;margin-right:6px}
+#combo .pop{animation:pop .35s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{from{transform:scale(1.9);opacity:.3}}
+.btn.raging{animation:rage .5s ease-in-out infinite;border-color:var(--ember)}
+@keyframes rage{50%{box-shadow:0 0 60px rgba(255,40,20,.85),inset 0 0 30px rgba(255,40,20,.4)}}
+main.shake{animation:shake .32s linear}
+@keyframes shake{
+  0%,100%{transform:none}
+  20%{transform:translate(calc(var(--sh) * -1),calc(var(--sh) * .6))}
+  40%{transform:translate(var(--sh),calc(var(--sh) * -.5))}
+  60%{transform:translate(calc(var(--sh) * -.6),calc(var(--sh) * -.8))}
+  80%{transform:translate(calc(var(--sh) * .5),calc(var(--sh) * .4))}}
+
+@media (max-width:760px){
+  nav{padding:14px 16px}
+  nav ul{display:none}
+  section{padding:100px 16px}
+  #prog{display:none}
+  .sound{left:16px;bottom:16px}
+  #vol{width:72px}
+  .panel{background:rgba(5,1,2,.6);padding:22px 18px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+  .stats{grid-template-columns:1fr}
+  .tier{grid-template-columns:60px 1fr}
+  .doctrine{grid-template-columns:1fr}
+  .tablet{grid-template-columns:1fr;gap:16px;min-height:0;padding:28px 20px}
+  .tab-han{writing-mode:horizontal-tb;padding:0 0 14px;border-right:none;border-bottom:1px solid rgba(217,164,65,.25);font-size:54px}
+}
+@media (prefers-reduced-motion:reduce){
+  .grain{animation:none}
+}
+</style>
+</head>
+<body>
+<div id="loader"><div class="glyph">魔</div><div class="txt">AWAKENING THE DEMON</div>
+  <div class="enter"><button class="btn" id="enterSound">ENTER WITH SOUND</button><button class="lnk" id="enterSilent">enter in silence</button></div>
+</div>
+<div class="sound">
+  <button id="snd" aria-pressed="false" aria-label="Toggle sound"><span class="eq"><i></i><i></i><i></i><i></i></span><span class="lbl">SOUND OFF</span></button>
+  <label class="vol"><span class="sr">Volume</span><input id="vol" type="range" min="0" max="100" step="1" value="70" aria-label="Volume"></label>
+</div>
+<canvas id="bg"></canvas>
+<div class="vignette"></div>
+<div class="grain"></div>
+<div id="flash"></div>
+<canvas id="blood" aria-hidden="true"></canvas>
+
+<nav>
+  <a class="mark" href="#hero">天魔</a>
+  <ul>
+    <li><a class="l" href="#path">The Path</a></li>
+    <li><a class="l" href="#cult">The Cult</a></li>
+    <li><a class="l" href="#doctrine">Doctrines</a></li>
+    <li><a class="l" href="#cheonma">Cheonma</a></li>
+    <li><a class="l" href="#arts">Arts</a></li>
+    <li><a class="l" href="#creed">Creed</a></li>
+  </ul>
+</nav>
+<div id="prog"></div>
+
+<main>
+  <section id="hero">
+    <div class="hero-han"><span style="animation-delay:.2s">天</span><span style="animation-delay:.5s">魔</span><span style="animation-delay:.8s">神</span><span style="animation-delay:1.1s">敎</span></div>
+    <div class="hero-title">THE HEAVENLY DEMON DIVINE CULT</div>
+    <div class="hero-sub">Where the Orthodox fear to tread, the demon walks unbowed.</div>
+    <div class="scroll-cue">DESCEND</div>
+  </section>
+
+  <section id="path">
+    <div class="wrap">
+      <div class="panel rv">
+        <span class="kicker">I — 魔道 · THE DEMONIC PATH</span>
+        <h2>Strength Is the<br>Only Scripture</h2>
+        <p>The Orthodox sects of the Murim teach restraint: temper desire, bow to heaven, cultivate virtue and let righteousness guide the sword. The Demonic Path rejects every word of it.</p>
+        <p>To walk <span class="han">魔道</span> is to believe that heaven is indifferent and that morality is a leash forged by the weak. Qi is not purified but <em>devoured</em>, desire is not suppressed but <em>wielded</em>, and the self is the only master a martial artist must answer to.</p>
+      </div>
+      <div class="grid">
+        <div class="card rv d1"><span class="big">力</span><h3>STRENGTH</h3><p>Power decides what is right. Rank is taken, never granted.</p></div>
+        <div class="card rv d2"><span class="big">欲</span><h3>DESIRE</h3><p>Ambition and fury are fuel. A suppressed heart is a wasted furnace.</p></div>
+        <div class="card rv d3"><span class="big">血</span><h3>BLOOD</h3><p>Loyalty is sealed in blood. Betrayal is answered in kind.</p></div>
+        <div class="card rv d3"><span class="big">我</span><h3>SELF</h3><p>No heaven above the will. The disciple's own Dao is law.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="cult" class="right">
+    <div class="wrap" style="display:flex;justify-content:flex-end">
+      <div class="panel rv">
+        <span class="kicker">II — 神敎 · THE DIVINE CULT</span>
+        <h2>An Empire in the<br>Hundred Thousand Mountains</h2>
+        <p>Far beyond the Central Plains, in the mist-choked peaks of the <em>Hundred Thousand Great Mountains</em>, the Cult rules a hidden domain of fortresses, forges and training grounds carved into black rock. The Murim Alliance has marched on it more than once. The mountains are still full of their bones.</p>
+        <div class="tiers">
+          <div class="tier rv d1"><span class="han">天魔</span><div><b>THE HEAVENLY DEMON</b><small>Absolute sovereign. One word from the throne moves ten thousand blades.</small></div></div>
+          <div class="tier rv d1"><span class="han">少敎主</span><div><b>THE YOUNG LORD</b><small>Successor chosen through trial and slaughter among rival heirs.</small></div></div>
+          <div class="tier rv d2"><span class="han">長老</span><div><b>THE ELDERS</b><small>Ancient masters who guard doctrine, forbidden manuals and the succession.</small></div></div>
+          <div class="tier rv d2"><span class="han">魔將</span><div><b>DEMON GENERALS</b><small>Commanders of the Blood Hall, Shadow Guard and the Black Banner army.</small></div></div>
+          <div class="tier rv d3"><span class="han">敎徒</span><div><b>THE FAITHFUL</b><small>Disciples, warriors and devotees: the endless tide beneath the throne.</small></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="doctrine">
+    <div class="wrap">
+      <div class="rv" style="max-width:640px">
+        <span class="kicker">III — 天魔九律 · THE DOCTRINES</span>
+        <h2>The Nine Laws of<br>the Heavenly Demon</h2>
+        <p>The Nine Laws are carved into the black stone of the <em>Hall of Ten Thousand Demons</em>, and every disciple recites them at dawn. Elders may argue over technique and succession. No one argues over these.</p>
+      </div>
+      <div class="doctrine rv d1">
+        <article class="tablet">
+          <div class="tab-han" id="dHan"></div>
+          <div class="tab-body" aria-live="polite">
+            <span class="tab-num" id="dNum"></span>
+            <h3 id="dTitle"></h3>
+            <p id="dText"></p>
+            <div class="tab-pen"><span>TRANSGRESSION</span><em id="dPen"></em></div>
+          </div>
+        </article>
+        <ol class="laws" id="laws" aria-label="The Nine Laws"></ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="cheonma">
+    <div class="wrap">
+      <div class="panel rv">
+        <span class="kicker">IV — THE SOVEREIGN</span>
+        <div class="title-han">天魔</div>
+        <h2>Cheonma,<br>The Heavenly Demon</h2>
+        <p>Cheonma is not a name but a <em>title</em>, worn by the one who stands at the summit of the Demonic Path. Each Heavenly Demon earns the throne alone. Whoever masters the Heavenly Demon Divine Art and outlives every rival becomes, to the faithful, a living god.</p>
+        <p>Orthodox chronicles call each one a calamity. The faithful call them salvation. Both agree on one thing: when the Heavenly Demon descends from the mountains, the Murim bleeds.</p>
+        <div class="stats">
+          <div class="stat"><label>INTERNAL ENERGY</label><div class="bar"><i style="--w:100%"></i></div></div>
+          <div class="stat"><label>MARTIAL REALM</label><div class="bar"><i style="--w:98%"></i></div></div>
+          <div class="stat"><label>KILLING INTENT</label><div class="bar"><i style="--w:95%"></i></div></div>
+          <div class="stat"><label>MERCY</label><div class="bar"><i style="--w:4%"></i></div></div>
+        </div>
+        <blockquote>"Heaven did not give me this throne. I took it, and heaven was silent."</blockquote>
+      </div>
+    </div>
+  </section>
+
+  <section id="arts" class="right">
+    <div class="wrap">
+      <div class="rv" style="max-width:640px;margin-left:auto">
+        <span class="kicker">V — 魔功 · DEMONIC ARTS</span>
+        <h2>The Forbidden Techniques</h2>
+        <p>Demonic arts give power faster than any Orthodox method, and they cost more. Many who attempt them suffer qi deviation and go mad. Those who survive become monsters.</p>
+      </div>
+      <div class="arts">
+        <div class="art rv d1" data-han="神"><span class="rank">SUPREME · SOVEREIGN ONLY</span><h3>Heavenly Demon Divine Art</h3><p>The founding art of the Cult. It turns the user's qi into a black-crimson flame that consumes other energy and finally the boundary between human and demon.</p></div>
+        <div class="art rv d2" data-han="掌"><span class="rank">GRAND · INNER SANCTUM</span><h3>Heaven-Shattering Palm</h3><p>A single palm thrust that bursts the meridians of everyone in its path. Mountainsides have been found split by its echo.</p></div>
+        <div class="art rv d3" data-han="血"><span class="rank">FORBIDDEN · BLOOD HALL</span><h3>Blood Demon Refinement</h3><p>Draws strength from the blood of fallen foes. Every battle makes the practitioner stronger and less human.</p></div>
+        <div class="art rv d1" data-han="影"><span class="rank">SECRET · SHADOW GUARD</span><h3>Phantom Demon Steps</h3><p>Footwork that leaves afterimages of the user. By the time the enemy strikes, the real body is behind them.</p></div>
+        <div class="art rv d2" data-han="劍"><span class="rank">GRAND · BLACK BANNER</span><h3>Nine Hells Sword</h3><p>Nine forms, each colder than the last. Its final form is said to freeze the blood in a man's veins before the blade lands.</p></div>
+        <div class="art rv d3" data-han="心"><span class="rank">CORE · ALL DISCIPLES</span><h3>Demon Heart Method</h3><p>The foundation every believer learns: letting rage and desire flow into the dantian instead of fighting them.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="creed">
+    <div class="wrap rv">
+      <span class="kicker">VI — THE CREED</span>
+      <div class="creed-han">天上天下<br>唯我獨尊</div>
+      <div class="creed-en">ABOVE HEAVEN AND BELOW · I ALONE AM SUPREME</div>
+      <p style="margin-top:22px;font-style:italic;color:var(--muted)">Ten thousand voices. One sovereign.</p>
+      <button class="btn" id="oath">SWEAR THE BLOOD OATH</button>
+      <div id="combo" aria-live="polite"></div>
+    </div>
+  </section>
+</main>
+<footer>天魔神敎 · A FICTIONAL TRIBUTE TO THE WUXIA DEMONIC CULT</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="audio.js"></script>
+<script>
+(() => {
+  const canvas = document.getElementById('bg');
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:false});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setClearColor(0x050102);
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0a0203, 0.035);
+  const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
+  camera.position.set(0, 0, 9);
+
+  /* ---------- Blood moon ---------- */
+  function glowTex(inner, outer){
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(128,128,0,128,128,128);
+    gr.addColorStop(0, inner); gr.addColorStop(.35, outer); gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0,0,256,256);
+    return new THREE.CanvasTexture(c);
+  }
+  const moon = new THREE.Mesh(new THREE.CircleGeometry(6, 64), new THREE.MeshBasicMaterial({color:0x8a0d12, fog:false}));
+  moon.position.set(16, 9, -40);
+  scene.add(moon);
+  const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex('rgba(255,60,40,.6)','rgba(150,0,10,.25)'), blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  moonGlow.scale.set(40,40,1); moonGlow.position.copy(moon.position); moonGlow.position.z += .1;
+  scene.add(moonGlow);
+
+  /* ---------- Mountains ---------- */
+  function mountainLayer(z, height, color, seed){
+    const geo = new THREE.PlaneGeometry(160, 30, 200, 1);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++){
+      const x = pos.getX(i);
+      if (pos.getY(i) > 0){
+        const h = Math.abs(Math.sin(x*.07+seed))*height + Math.abs(Math.sin(x*.21+seed*2))*height*.45 + Math.sin(x*.9+seed)*.4;
+        pos.setY(i, -15 + 15 + h - 6);
+      }
+    }
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color}));
+    m.position.set(0, -8, z);
+    scene.add(m); return m;
+  }
+  const mountains = [
+    mountainLayer(-35, 9, 0x120305, 1.3),
+    mountainLayer(-25, 7, 0x0c0204, 4.1),
+    mountainLayer(-16, 5, 0x070102, 7.7),
+  ];
+
+  /* ---------- Demonic core (shader) ---------- */
+  const coreUniforms = { uTime:{value:0}, uPower:{value:0.4} };
+  const noise = `
+    vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+    vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
+    vec4 permute(vec4 x){return mod289(((x*34.)+1.)*x);}
+    vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-.85373472095314*r;}
+    float snoise(vec3 v){
+      const vec2 C=vec2(1./6.,1./3.);const vec4 D=vec4(0.,.5,1.,2.);
+      vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);
+      vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.-g;vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);
+      vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;i=mod289(i);
+      vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+      float n_=.142857142857;vec3 ns=n_*D.wyz-D.xzx;vec4 j=p-49.*floor(p*ns.z*ns.z);
+      vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.*x_);vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.-abs(x)-abs(y);
+      vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);vec4 s0=floor(b0)*2.+1.;vec4 s1=floor(b1)*2.+1.;vec4 sh=-step(h,vec4(0.));
+      vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+      vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+      vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+      vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;
+      return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+    }`;
+  const coreMat = new THREE.ShaderMaterial({
+    uniforms: coreUniforms,
+    vertexShader: noise + `
+      uniform float uTime; uniform float uPower;
+      varying float vN; varying vec3 vNormal; varying vec3 vView;
+      void main(){
+        float n = snoise(normal*1.6 + vec3(uTime*.35));
+        float n2 = snoise(normal*4.0 - vec3(uTime*.6))*.35;
+        vN = n + n2;
+        vec3 p = position + normal * (vN * (.14 + uPower*.16));
+        vec4 mv = modelViewMatrix * vec4(p,1.);
+        vNormal = normalize(normalMatrix*normal); vView = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float uTime; uniform float uPower;
+      varying float vN; varying vec3 vNormal; varying vec3 vView;
+      void main(){
+        float fres = pow(1. - max(dot(vNormal, vView), 0.), 2.2);
+        vec3 black = vec3(.02,.0,.005);
+        vec3 blood = vec3(.75,.03,.06);
+        vec3 ember = vec3(1.,.38,.1);
+        float veins = smoothstep(.25,.7,vN);
+        vec3 col = mix(black, blood, veins);
+        col = mix(col, ember, smoothstep(.6,1.1,vN) * (.5+uPower));
+        col += fres * mix(blood, ember, .4) * (1.2 + uPower*1.5);
+        gl_FragColor = vec4(col, 1.);
+      }`
+  });
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5, 48), coreMat);
+  const coreGroup = new THREE.Group();
+  coreGroup.add(core);
+  const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex('rgba(255,80,40,.9)','rgba(180,0,20,.35)'), blending:THREE.AdditiveBlending, depthWrite:false, transparent:true}));
+  coreGlow.scale.set(10,10,1);
+  coreGroup.add(coreGlow);
+  scene.add(coreGroup);
+
+  /* ---------- Rune rings ---------- */
+  function runeTexture(text, color){
+    const c = document.createElement('canvas'); c.width = 2048; c.height = 128;
+    const g = c.getContext('2d');
+    g.clearRect(0,0,c.width,c.height);
+    g.font = '88px "Ma Shan Zheng", serif';
+    g.textBaseline = 'middle'; g.fillStyle = color;
+    g.shadowColor = color; g.shadowBlur = 6;
+    const chars = text.split(''); const step = c.width / chars.length;
+    chars.forEach((ch,i)=> g.fillText(ch, i*step + step*.15, 66));
+    g.fillRect(0, 6, c.width, 3); g.fillRect(0, 119, c.width, 3);
+    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; return t;
+  }
+  const rings = [];
+  const ringDefs = [
+    {r:2.7, h:.42, text:'天魔神功血魔劍法唯我獨尊魔道天下', color:'#ff2a2a', tilt:[1.25,0,.2], speed:.25},
+    {r:3.4, h:.36, text:'天上天下唯我獨尊十萬大山魔敎永世', color:'#ff7a2a', tilt:[1.7,.4,-.5], speed:-.18},
+    {r:4.2, h:.3, text:'血海屍山萬魔歸宗天魔降臨正派滅絶', color:'#d9a441', tilt:[1.0,-.6,.7], speed:.12},
+  ];
+  function makeRings(){
+    rings.forEach(r=>coreGroup.remove(r.mesh));
+    rings.length = 0;
+    ringDefs.forEach(d=>{
+      const geo = new THREE.CylinderGeometry(d.r, d.r, d.h, 128, 1, true);
+      const mat = new THREE.MeshBasicMaterial({map:runeTexture(d.text,d.color), transparent:true, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false});
+      const pivot = new THREE.Group();
+      const mesh = new THREE.Mesh(geo, mat);
+      pivot.rotation.set(...d.tilt);
+      pivot.add(mesh);
+      coreGroup.add(pivot);
+      rings.push({mesh:pivot, inner:mesh, d});
+    });
+  }
+  makeRings();
+  // re-render runes once the calligraphy font has loaded
+  if (document.fonts) document.fonts.load('88px "Ma Shan Zheng"').then(makeRings).catch(()=>{});
+
+  /* ---------- Embers ---------- */
+  const isMobile = innerWidth < 760;
+  const N = isMobile ? 1800 : 4500;
+  const eg = new THREE.BufferGeometry();
+  const ep = new Float32Array(N*3), es = new Float32Array(N), eo = new Float32Array(N);
+  for (let i=0;i<N;i++){
+    ep[i*3] = (Math.random()-.5)*40;
+    ep[i*3+1] = (Math.random()-.5)*30;
+    ep[i*3+2] = (Math.random()-.5)*30 - 4;
+    es[i] = Math.random()*1.5+.4; eo[i] = Math.random()*100;
+  }
+  eg.setAttribute('position', new THREE.BufferAttribute(ep,3));
+  eg.setAttribute('aSize', new THREE.BufferAttribute(es,1));
+  eg.setAttribute('aOff', new THREE.BufferAttribute(eo,1));
+  const emberMat = new THREE.ShaderMaterial({
+    uniforms:{uTime:{value:0}, uPix:{value:renderer.getPixelRatio()}, uSpeed:{value:1}},
+    vertexShader:`
+      uniform float uTime; uniform float uPix; uniform float uSpeed;
+      attribute float aSize; attribute float aOff; varying float vA;
+      void main(){
+        vec3 p = position;
+        p.y = mod(p.y + uTime*(.4+aSize*.3)*uSpeed + 15., 30.) - 15.;
+        p.x += sin(uTime*.6 + aOff)*.6;
+        p.z += cos(uTime*.4 + aOff)*.4;
+        vec4 mv = modelViewMatrix*vec4(p,1.);
+        gl_PointSize = aSize * 34. * uPix / -mv.z;
+        vA = (.5+.5*sin(uTime*3.+aOff)) * smoothstep(15.,8.,abs(p.y));
+        gl_Position = projectionMatrix*mv;
+      }`,
+    fragmentShader:`
+      varying float vA;
+      void main(){
+        float d = length(gl_PointCoord-.5);
+        float a = smoothstep(.5,.0,d);
+        vec3 c = mix(vec3(1.,.2,.05), vec3(1.,.75,.4), a*a);
+        gl_FragColor = vec4(c, a*vA);
+      }`,
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending
+  });
+  const embers = new THREE.Points(eg, emberMat);
+  scene.add(embers);
+
+  /* ---------- Mist planes ---------- */
+  const mistTex = (()=>{
+    const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');
+    for(let i=0;i<40;i++){const x=Math.random()*256,y=Math.random()*256,r=40+Math.random()*80;
+      const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(120,20,25,.12)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(0,0,256,256);}
+    return new THREE.CanvasTexture(c);
+  })();
+  const mists = [];
+  for (let i=0;i<5;i++){
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(50,14), new THREE.MeshBasicMaterial({map:mistTex, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, opacity:.8}));
+    m.position.set((Math.random()-.5)*10, -6+Math.random()*2, -10 - i*5);
+    scene.add(m); mists.push(m);
+  }
+
+  /* ---------- Scroll keyframes ---------- */
+  // per section: camera pos, core x offset, power
+  const keys = [
+    {cam:[0,0,11],   core:[0,0,-3],    power:.3,  rot:0},     // hero
+    {cam:[0,.5,8],   core:[3.2,0,-1],  power:.45, rot:.6},    // path
+    {cam:[-.5,1,7.5],core:[-3.3,.2,-1],power:.6,  rot:1.4},   // cult
+    {cam:[.4,.9,9.5],core:[3.8,.4,-4], power:.55, rot:1.9},   // doctrine
+    {cam:[0,-.3,5.5],core:[3,0,0],     power:1.0, rot:2.4},   // cheonma
+    {cam:[0,1.5,9],  core:[-3.4,0,-2], power:.75, rot:3.2},   // arts
+    {cam:[0,0,7],    core:[0,0,-1],    power:1.2, rot:4.4},   // creed
+  ];
+  const sections = [...document.querySelectorAll('main section')];
+  if (isMobile) keys.forEach((k,i)=>{ if(i>0){ k.core[0]=0; k.core[1]=-1.5; k.core[2]=-4; } });
+
+  let scrollT = 0, lastIdx = -1;
+  function readScroll(){
+    const mid = scrollY + innerHeight/2;
+    let idx = 0;
+    for (let i=0;i<sections.length;i++){ if (sections[i].offsetTop <= mid) idx = i; }
+    const s = sections[idx], next = sections[idx+1];
+    const span = next ? next.offsetTop - s.offsetTop : s.offsetHeight;
+    const f = Math.min(Math.max((mid - s.offsetTop - span*.5)/span, 0), 1);
+    scrollT = Math.min(idx + (next ? f : 0), keys.length-1);
+    if (idx !== lastIdx){ if (lastIdx !== -1) cultAudio.section(idx, sections[idx].id); lastIdx = idx; }
+    document.querySelectorAll('#prog a').forEach((a,i)=>a.classList.toggle('on', i===idx));
+  }
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const ease = t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+  function sample(t){
+    const i = Math.floor(t), j = Math.min(i+1, keys.length-1), f = ease(t-i);
+    const A = keys[i], B = keys[j];
+    return {
+      cam: A.cam.map((v,k)=>lerp(v,B.cam[k],f)),
+      core: A.core.map((v,k)=>lerp(v,B.core[k],f)),
+      power: lerp(A.power,B.power,f),
+      rot: lerp(A.rot,B.rot,f)
+    };
+  }
+
+  /* ---------- Interaction ---------- */
+  const mouse = {x:0,y:0,tx:0,ty:0};
+  addEventListener('pointermove', e=>{ mouse.tx = e.clientX/innerWidth-.5; mouse.ty = e.clientY/innerHeight-.5; });
+  addEventListener('scroll', readScroll, {passive:true});
+  addEventListener('resize', ()=>{
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight); readScroll();
+  });
+
+  let surge = 0, camShake = 0;
+
+  /* ---------- Blood oath: combo, splatter, shake ---------- */
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const bc = document.getElementById('blood'), bx = bc.getContext('2d');
+  let drops = [], stains = [], bloodRunning = false;
+  function sizeBlood(){
+    const d = Math.min(devicePixelRatio, 2);
+    bc.width = innerWidth*d; bc.height = innerHeight*d; bx.setTransform(d,0,0,d,0,0);
+  }
+  sizeBlood(); addEventListener('resize', sizeBlood);
+  const rnd = (a,b)=>a+Math.random()*(b-a);
+  function makeStain(x, y, r){
+    const blobs = [{dx:0, dy:0, r}];
+    const nb = 3 + Math.floor(r/4);
+    for (let i=0;i<nb;i++){ const a=rnd(0,Math.PI*2), d=rnd(r*.5,r*1.3); blobs.push({dx:Math.cos(a)*d, dy:Math.sin(a)*d, r:rnd(r*.15,r*.45)}); }
+    const drips = [];
+    const nd = r > 6 ? Math.floor(rnd(1, 1 + r/6)) : (Math.random() < .2 ? 1 : 0);
+    for (let i=0;i<nd;i++) drips.push({dx:rnd(-r*.7,r*.7), w:rnd(r*.12,r*.3)+1, len:0, max:rnd(r*2,r*9)+20, v:rnd(.3,1.2)});
+    stains.push({x, y, r, blobs, drips, age:0, life:rnd(260,420)});
+    if (stains.length > 160) stains.splice(0, stains.length-160);
+  }
+  function splatter(x, y, power){
+    const n = Math.min(16 + power*7, 140);
+    for (let i=0;i<n;i++){
+      const a = rnd(0,Math.PI*2), sp = rnd(2, 7 + power*1.2);
+      drops.push({x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - rnd(1,4), r:rnd(1.2, 2.6 + power*.25), life:rnd(18,45)});
+    }
+    makeStain(x, y, Math.min(10 + power*2.5, 46));
+    if (!bloodRunning){ bloodRunning = true; requestAnimationFrame(bloodLoop); }
+  }
+  function drawStain(s, a){
+    bx.fillStyle = `rgba(112,0,8,${a})`;
+    bx.beginPath();
+    s.blobs.forEach(b=>{ bx.moveTo(s.x+b.dx+b.r, s.y+b.dy); bx.arc(s.x+b.dx, s.y+b.dy, b.r, 0, Math.PI*2); });
+    s.drips.forEach(d=>{
+      const x = s.x + d.dx - d.w/2;
+      bx.rect(x, s.y, d.w, d.len);
+      bx.moveTo(x + d.w/2 + d.w*.9, s.y + d.len); bx.arc(x + d.w/2, s.y + d.len, d.w*.9, 0, Math.PI*2);
+    });
+    bx.fill();
+    bx.fillStyle = `rgba(255,90,80,${a*.18})`;   // wet highlight
+    bx.beginPath(); bx.arc(s.x - s.r*.3, s.y - s.r*.3, s.r*.35, 0, Math.PI*2); bx.fill();
+  }
+  function bloodLoop(){
+    bx.clearRect(0, 0, innerWidth, innerHeight);
+    for (let i=stains.length-1;i>=0;i--){
+      const s = stains[i]; s.age++;
+      s.drips.forEach(d=>{ if (d.len < d.max){ d.len += d.v; d.v *= .996; } });
+      const a = s.age < s.life*.6 ? .92 : .92*(1 - (s.age - s.life*.6)/(s.life*.4));
+      if (a <= 0){ stains.splice(i,1); continue; }
+      drawStain(s, a);
+    }
+    bx.strokeStyle = 'rgb(150,0,12)'; bx.lineCap = 'round';
+    for (let i=drops.length-1;i>=0;i--){
+      const d = drops[i];
+      d.vy += .32; d.vx *= .985; d.x += d.vx; d.y += d.vy; d.life--;
+      bx.lineWidth = d.r*2;
+      bx.beginPath(); bx.moveTo(d.x - d.vx*1.6, d.y - d.vy*1.6); bx.lineTo(d.x, d.y); bx.stroke();
+      if (d.life <= 0){ if (d.y < innerHeight) makeStain(d.x, d.y, d.r*rnd(1.2,2.4)); drops.splice(i,1); }
+    }
+    if (drops.length || stains.length) requestAnimationFrame(bloodLoop);
+    else { bloodRunning = false; bx.clearRect(0, 0, innerWidth, innerHeight); }
+  }
+
+  const TIERS = [
+    [1,  'YOUR BLOOD IS SWORN'],
+    [3,  'THE BLOOD BOILS'],
+    [6,  'THE BLOOD DEMON AWAKENS'],
+    [10, '血海 · A SEA OF BLOOD'],
+    [15, '天魔降臨 · THE HEAVENLY DEMON DESCENDS'],
+  ];
+  const oathBtn = document.getElementById('oath'), comboEl = document.getElementById('combo');
+  const mainEl = document.querySelector('main'), flashEl = document.getElementById('flash');
+  let combo = 0, comboTimer = null, sworn = false;
+  function flash(cls){ flashEl.classList.remove('go','soft'); void flashEl.offsetWidth; flashEl.classList.add(cls); }
+  function endCombo(){
+    combo = 0;
+    comboEl.classList.remove('show');
+    oathBtn.classList.remove('raging');
+    oathBtn.textContent = 'YOUR BLOOD IS SWORN';
+  }
+  oathBtn.addEventListener('click', e=>{
+    const r = oathBtn.getBoundingClientRect();
+    const x = e.detail ? e.clientX : r.left + r.width/2;   // keyboard presses splash from the button centre
+    const y = e.detail ? e.clientY : r.top + r.height/2;
+    combo++;
+    clearTimeout(comboTimer); comboTimer = setTimeout(endCombo, 1600);
+    const ti = TIERS.reduce((k,t,i)=>combo >= t[0] ? i : k, 0);
+    const tierUp = TIERS[ti][0] === combo && combo > 1;
+
+    if (!sworn){
+      sworn = true;
+      if (cultAudio.muted) cultAudio.start();
+      cultAudio.oath();
+      flash('go');
+    } else {
+      cultAudio.oathHit(combo, tierUp);
+      if (tierUp) flash('soft');
+    }
+
+    splatter(x, y, combo);
+    if (tierUp) for (let k=0;k<2+ti*2;k++)
+      setTimeout(()=>splatter(rnd(.08,.92)*innerWidth, rnd(.08,.8)*innerHeight, combo*.6), 80 + k*90);
+
+    surge = Math.min(1 + combo*.12, 2.6);
+    if (!reduceMotion){
+      camShake = Math.min(.06 + combo*.025, .4);
+      if (combo >= 3){
+        mainEl.style.setProperty('--sh', Math.min(2 + combo*.5, 10) + 'px');
+        mainEl.classList.remove('shake'); void mainEl.offsetWidth; mainEl.classList.add('shake');
+      }
+    }
+    oathBtn.textContent = TIERS[ti][1];
+    oathBtn.classList.toggle('raging', combo >= 6);
+    comboEl.innerHTML = `<span class="x pop">血</span>× ${combo}`;
+    comboEl.classList.add('show');
+  });
+
+  /* ---------- Loop ---------- */
+  const clock = new THREE.Clock();
+  const cur = sample(0);
+  let lastT = 0;
+  function tick(){
+    const t = clock.getElapsedTime();
+    const target = sample(scrollT);
+    const k = .05;
+    cur.cam = cur.cam.map((v,i)=>lerp(v,target.cam[i],k));
+    cur.core = cur.core.map((v,i)=>lerp(v,target.core[i],k));
+    cur.power = lerp(cur.power, target.power, k);
+    cur.rot = lerp(cur.rot, target.rot, k);
+    surge *= .97;
+
+    mouse.x = lerp(mouse.x, mouse.tx, .05); mouse.y = lerp(mouse.y, mouse.ty, .05);
+
+    camera.position.set(
+      cur.cam[0] + mouse.x*1.2 + (Math.random()-.5)*camShake,
+      cur.cam[1] - mouse.y*.8 + (Math.random()-.5)*camShake,
+      cur.cam[2]);
+    camShake *= .9;
+    camera.lookAt(cur.core[0]*.35, cur.core[1]*.35, -2);
+
+    const pw = cur.power + surge*1.5;
+    cultAudio.setPower(pw);
+    // advance the core's own clock so surges speed it up without jumping
+    coreUniforms.uTime.value += Math.min(t - lastT, .1) * (1 + surge*3);
+    lastT = t;
+    coreUniforms.uPower.value = pw;
+    coreGroup.position.set(cur.core[0], cur.core[1] + Math.sin(t*.8)*.15, cur.core[2]);
+    core.rotation.y = t*.15 + cur.rot; core.rotation.x = t*.07;
+    const s = 1 + surge*.35 + Math.sin(t*2)*.02*pw;
+    core.scale.setScalar(s);
+    coreGlow.scale.setScalar(6 + pw*3.5 + Math.sin(t*2.5)*.4);
+    coreGlow.material.opacity = .35 + pw*.25;
+
+    rings.forEach((r,i)=>{
+      r.inner.rotation.y = t*r.d.speed*(1+surge*6) + cur.rot*(i%2?-1:1);
+      r.mesh.rotation.z = r.d.tilt[2] + Math.sin(t*.3+i)*.15;
+      const rs = 1 + (pw-.4)*.12 + surge*.3;
+      r.mesh.scale.setScalar(rs);
+    });
+
+    emberMat.uniforms.uTime.value = t;
+    emberMat.uniforms.uSpeed.value = 1 + pw*.6 + surge*4;
+    mists.forEach((m,i)=>{ m.position.x = Math.sin(t*.05+i*1.7)*6; });
+    mountains.forEach((m,i)=>{ m.position.x = -mouse.x*(i+1)*.8; });
+    moon.material.color.setRGB(.45+pw*.25, .03, .05);
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+
+  /* ---------- UI ---------- */
+  const prog = document.getElementById('prog');
+  sections.forEach(s=>{ const a=document.createElement('a'); a.href='#'+s.id; a.title=s.id; prog.appendChild(a); });
+  const io = new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('in'); }), {threshold:.15});
+  document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+
+  // 3D tilt on cards
+  document.querySelectorAll('.card,.art').forEach(c=>{
+    c.addEventListener('pointermove', e=>{
+      const r = c.getBoundingClientRect();
+      const x = (e.clientX-r.left)/r.width-.5, y = (e.clientY-r.top)/r.height-.5;
+      c.style.transform = `perspective(700px) rotateY(${x*12}deg) rotateX(${-y*12}deg) translateZ(10px)`;
+    });
+    c.addEventListener('pointerleave', ()=>{ c.style.transform=''; });
+    c.addEventListener('pointerenter', ()=>cultAudio.hover());
+  });
+
+  /* ---------- Doctrines: the Nine Laws ---------- */
+  const LAWS = [
+    {han:'力卽天理', t:'Strength Is Heaven\'s Law',
+     text:'The strong rule and the weak serve. This is not cruelty but the natural order. A disciple who wants a higher place must take it with their own hands.',
+     pen:'None. The weak are not punished, only left behind.'},
+    {han:'天魔至尊', t:'The Heavenly Demon Is Supreme',
+     text:'The word of the Cheonma stands above scripture, above the Elders and above ties of blood. When the throne speaks, the whole Cult moves as one body.',
+     pen:'Defiance of a direct command is answered by the Heavenly Demon personally.'},
+    {han:'血盟不背', t:'The Blood Oath Is Never Broken',
+     text:'Every believer seals their entry with blood on the altar. That oath binds for life, and death does not release it.',
+     pen:'The Blood Hall hunts the traitor to the ends of the Central Plains.'},
+    {han:'敎友不殘', t:'Do Not Prey on Your Brethren',
+     text:'Rivalry is encouraged, but murder within the Cult is forbidden. Grudges are settled in a sanctioned duel, witnessed by an Elder.',
+     pen:'The killer\'s meridians are severed and their arts are stripped away.'},
+    {han:'欲爲薪火', t:'Desire Is the Kindling',
+     text:'Ambition, hunger and rage are not sins to purge. They are fuel for the dantian. A disciple who denies their own heart cultivates a cold furnace.',
+     pen:'Stagnation, and for the weak-willed, qi deviation.'},
+    {han:'正派不信', t:'Trust No Orthodox Oath',
+     text:'The Orthodox sects speak of righteousness and break truces whenever it suits them. Their vows are worth nothing. Measure them by their blades, not their words.',
+     pen:'Whoever is deceived bears the blame for every life lost.'},
+    {han:'秘功不洩', t:'Guard the Secret Arts',
+     text:'The manuals of the Cult belong to the Cult. No technique may be taught, traded or written down for anyone outside the faith.',
+     pen:'The hands that wrote it and the tongue that spoke it are taken.'},
+    {han:'敗者無言', t:'The Defeated Hold Their Tongue',
+     text:'There are no excuses in the Murim. Whoever is defeated keeps silent, swallows the shame, trains harder, and answers only with the next fight.',
+     pen:'A loser who complains is beaten a second time in front of the whole hall.'},
+    {han:'魔道無悔', t:'No Regret on the Demonic Path',
+     text:'Once you step onto the Path, it does not turn back, and neither does the one who walks it. Regret is the first crack through which madness enters.',
+     pen:'There is no punishment. The Path itself takes those who look back.'},
+  ];
+  const NUMS = '一二三四五六七八九';
+  const lawsEl = document.getElementById('laws');
+  const lawBtns = LAWS.map((l, i) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = `<span class="n">${NUMS[i]}</span><span class="t">${l.t}</span>`;
+    b.addEventListener('click', () => showLaw(i, true));
+    b.addEventListener('keydown', e => {
+      const d = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      const n = (i + d + LAWS.length) % LAWS.length;
+      lawBtns[n].focus(); showLaw(n, true);
+    });
+    li.appendChild(b); lawsEl.appendChild(li);
+    return b;
+  });
+  const dHan = document.getElementById('dHan'), dBody = document.querySelector('.tab-body');
+  function showLaw(i, user){
+    const l = LAWS[i];
+    dHan.textContent = l.han;
+    document.getElementById('dNum').textContent = `第${NUMS[i]}律 · LAW ${['I','II','III','IV','V','VI','VII','VIII','IX'][i]}`;
+    document.getElementById('dTitle').textContent = l.t;
+    document.getElementById('dText').textContent = l.text;
+    document.getElementById('dPen').textContent = l.pen;
+    [dHan, dBody].forEach(el => { el.classList.remove('ink'); void el.offsetWidth; el.classList.add('ink'); });
+    lawBtns.forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
+    if (user){ cultAudio.doctrine(i); surge = Math.max(surge, .35); }
+  }
+  showLaw(0, false);
+
+  readScroll();
+  tick();
+
+  // Enter screen: a click is required before browsers allow audio
+  const loader = document.getElementById('loader');
+  setTimeout(()=>loader.classList.add('ready'), 700);
+  document.getElementById('enterSound').addEventListener('click', ()=>{ cultAudio.start(); loader.classList.add('done'); });
+  document.getElementById('enterSilent').addEventListener('click', ()=>{ cultAudio.stop(); loader.classList.add('done'); });
+  document.getElementById('snd').addEventListener('click', ()=>cultAudio.toggle());
+  document.getElementById('vol').addEventListener('input', e=>{
+    cultAudio.setVolume(e.target.value/100);
+    if (cultAudio.muted && e.target.value > 0) cultAudio.start(); // dragging up turns sound on
+  });
+})();
+</script>
+</body>
+</html>
