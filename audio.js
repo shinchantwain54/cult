@@ -439,6 +439,67 @@ window.cultAudio = (() => {
     bed.gain.cancelScheduledValues(now()); bed.gain.setTargetAtTime(1, now(), 0.4);
   }
 
+  /* ---------- Storm and whispers ---------- */
+  // thunder: dist 0 = overhead crack, 1 = distant rumble
+  function thunder(dist = 0.5) {
+    if (!ctx || muted) return;
+    const t = now() + 0.02, near = 1 - dist;
+    const n = ctx.createBufferSource(); n.buffer = noise; n.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.8;
+    lp.frequency.setValueAtTime(300 + near * 2400, t);
+    lp.frequency.exponentialRampToValueAtTime(45, t + 2.5 + dist * 2.5);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.25 + near * 0.5, t + 0.015 + dist * 0.3);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 3 + dist * 3);
+    // rolling rumble: slow random amplitude wobble
+    const wob = ctx.createOscillator(); wob.type = 'sine'; wob.frequency.value = 2.3 + Math.random() * 3;
+    const wobG = ctx.createGain(); wobG.gain.value = 0.35;
+    wob.connect(wobG); wobG.connect(g.gain); wob.start(t); wob.stop(t + 6);
+    n.connect(lp); lp.connect(g); send(g, 0.6); n.start(t, Math.random()); n.stop(t + 6.5);
+    // sub thump
+    const sub = ctx.createOscillator(); sub.type = 'sine';
+    sub.frequency.setValueAtTime(55, t); sub.frequency.exponentialRampToValueAtTime(24, t + 1.8);
+    const sg = ctx.createGain();
+    sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(0.3 + near * 0.4, t + 0.03 + dist * 0.2);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+    sub.connect(sg); send(sg, 0.2); sub.start(t); sub.stop(t + 2.3);
+    if (near > 0.6) {  // close strike: sharp crack first
+      const c = ctx.createBufferSource(); c.buffer = noise;
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
+      const cg = ctx.createGain();
+      cg.gain.setValueAtTime(0.6 * near, t); cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      c.connect(hp); hp.connect(cg); send(cg, 0.5); c.start(t, Math.random()); c.stop(t + 0.15);
+    }
+  }
+  // a voice in the dark, when the eyes open
+  let lastWhisper = 0;
+  function whisper() {
+    if (!ctx || muted) return;
+    const pn = performance.now();
+    if (pn - lastWhisper < 3500) return;
+    lastWhisper = pn;
+    const t = now(), len = 1.2 + Math.random() * 1.2;
+    const n = ctx.createBufferSource(); n.buffer = noise; n.loop = true;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500;
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(0.05, t + 0.3);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    // two wandering formants make it sound like breathed syllables
+    [[900, 7], [1700, 9]].forEach(([f, q], i) => {
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 3.5 + Math.random() * 4 + i;
+      const lg = ctx.createGain(); lg.gain.value = f * 0.45;
+      lfo.connect(lg); lg.connect(bp.frequency); lfo.start(t); lfo.stop(t + len + 0.1);
+      hp.connect(bp); bp.connect(out);
+    });
+    n.connect(hp);
+    const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (p) { p.pan.value = Math.random() * 1.6 - 0.8; out.connect(p); send(p, 0.9); } else send(out, 0.9);
+    n.start(t, Math.random()); n.stop(t + len + 0.2);
+  }
+
   function hover() {
     if (!ctx || muted) return;
     const t = performance.now();
@@ -467,5 +528,5 @@ window.cultAudio = (() => {
     document.hidden ? ctx.suspend() : ctx.resume();
   });
 
-  return { start, stop, toggle, setVolume, get volume() { return volume; }, setPower, section, doctrine, oath, oathHit, setTension, finaleStart, slash, finaleImpact, finaleEnd, hover, get muted() { return muted; } };
+  return { start, stop, toggle, setVolume, get volume() { return volume; }, setPower, section, doctrine, oath, oathHit, setTension, finaleStart, slash, finaleImpact, finaleEnd, thunder, whisper, hover, get muted() { return muted; } };
 })();

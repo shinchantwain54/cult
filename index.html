@@ -20,6 +20,8 @@
 html{scroll-behavior:smooth}
 body{background:var(--ink);color:var(--ash);font-family:"Cormorant Garamond",serif;font-size:19px;line-height:1.65;overflow-x:hidden}
 #bg{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+#storm{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+#qi{position:fixed;inset:0;width:100%;height:100%;z-index:31;pointer-events:none}
 .vignette{position:fixed;inset:0;pointer-events:none;z-index:1;
   background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.85) 100%)}
 .grain{position:fixed;inset:-50%;pointer-events:none;z-index:2;opacity:.06;
@@ -186,6 +188,20 @@ footer{position:relative;z-index:3;text-align:center;padding:40px 20px 50px;font
 #flash.go{animation:flash 1.6s ease-out}
 @keyframes flash{0%{opacity:0}10%{opacity:1}100%{opacity:0}}
 #flash.soft{animation:flashSoft .6s ease-out}
+#flash.bolt{animation:flashBolt .5s steps(3,end);background:radial-gradient(ellipse at 50% 0%,rgba(255,210,200,.9),rgba(255,40,40,.35) 50%,transparent 80%)}
+@keyframes flashBolt{0%{opacity:.9}40%{opacity:.25}60%{opacity:.7}100%{opacity:0}}
+
+/* Demonic corruption of text */
+.corrupt{animation:corrupt .42s steps(1,end) both}
+.corrupt:not(h2){text-shadow:-4px 0 rgba(255,20,40,.9),4px 0 rgba(0,0,0,1),0 0 18px rgba(255,0,30,.8)}
+@keyframes corrupt{
+  0%{transform:translate(-3px,1px) skewX(-7deg);clip-path:inset(0 0 55% 0)}
+  20%{transform:translate(4px,-2px) skewX(5deg);clip-path:inset(35% 0 20% 0)}
+  40%{transform:translate(-2px,2px);clip-path:inset(60% 0 4% 0)}
+  60%{transform:translate(2px,0) skewX(-3deg);clip-path:inset(10% 0 70% 0)}
+  80%{transform:translate(-1px,-1px);clip-path:inset(45% 0 30% 0)}
+  100%{transform:none;clip-path:none}}
+.corrupt-char{color:#ff1a2a !important;-webkit-text-fill-color:#ff1a2a;text-shadow:0 0 14px #ff0020}
 @keyframes flashSoft{0%{opacity:0}15%{opacity:.3}100%{opacity:0}}
 
 /* Blood oath combo */
@@ -260,7 +276,9 @@ main.shake{animation:shake .32s linear}
   <label class="vol"><span class="sr">Volume</span><input id="vol" type="range" min="0" max="100" step="1" value="70" aria-label="Volume"></label>
 </div>
 <canvas id="bg"></canvas>
+<canvas id="storm" aria-hidden="true"></canvas>
 <div class="vignette"></div>
+<canvas id="qi" aria-hidden="true"></canvas>
 <div class="grain"></div>
 <div id="flash"></div>
 <canvas id="blood" aria-hidden="true"></canvas>
@@ -632,6 +650,327 @@ main.shake{animation:shake .32s linear}
     scene.add(m); mists.push(m);
   }
 
+  /* ================= DEMONIC LAYERS ================= */
+  const R = (a,b)=>a+Math.random()*(b-a);
+  const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function randDir(v){ const z=R(-1,1), a=R(0,Math.PI*2), s=Math.sqrt(1-z*z); return v.set(Math.cos(a)*s, Math.sin(a)*s, z); }
+
+  /* ---------- Demon wings: canvas-painted membranes, flapped in the vertex shader ---------- */
+  function wingTexture(){
+    const c = document.createElement('canvas'); c.width = 512; c.height = 320;
+    const g = c.getContext('2d');
+    const root = [14,306], tips = [[505,14],[510,108],[478,206],[392,296]];
+    g.beginPath(); g.moveTo(root[0],root[1]); g.lineTo(tips[0][0],tips[0][1]);
+    for (let i=1;i<tips.length;i++){
+      const a=tips[i-1], b=tips[i], mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+      g.quadraticCurveTo(mx+(root[0]-mx)*.38, my+(root[1]-my)*.38, b[0], b[1]);
+    }
+    g.closePath();
+    const gr = g.createRadialGradient(root[0],root[1],20,root[0],root[1],520);
+    gr.addColorStop(0,'rgba(110,6,14,.97)'); gr.addColorStop(.55,'rgba(42,2,7,.9)'); gr.addColorStop(1,'rgba(12,0,3,.75)');
+    g.fillStyle = gr; g.fill();
+    g.save(); g.clip();                       // veins stay inside the membrane
+    g.strokeStyle = 'rgba(220,30,40,.28)'; g.lineWidth = 1.1;
+    for (let i=0;i<70;i++){
+      let x=root[0]+R(0,60), y=root[1]-R(0,40), a=R(-1.2,0.1);
+      g.beginPath(); g.moveTo(x,y);
+      for (let s=0;s<9;s++){ a += R(-.5,.5); x += Math.cos(a)*R(20,48); y += Math.sin(a)*R(20,48); g.lineTo(x,y); }
+      g.stroke();
+    }
+    g.restore();
+    g.shadowColor = '#ff2a2a'; g.shadowBlur = 16; g.lineCap = 'round'; g.strokeStyle = '#ff3d3d';
+    tips.forEach((t,i)=>{
+      g.lineWidth = 6 - i*.6;
+      g.beginPath(); g.moveTo(root[0],root[1]);
+      g.quadraticCurveTo((root[0]+t[0])/2, (root[1]+t[1])/2 - 28, t[0], t[1]); g.stroke();
+      // claw
+      g.lineWidth = 3; g.beginPath(); g.moveTo(t[0],t[1]); g.lineTo(t[0]+8, t[1]-14); g.stroke();
+    });
+    return new THREE.CanvasTexture(c);
+  }
+  const wingU = { uTime:{value:0}, uFlap:{value:1}, uShow:{value:0}, uPower:{value:0}, uMap:{value:wingTexture()} };
+  const wingMat = new THREE.ShaderMaterial({
+    uniforms: wingU, transparent:true, depthWrite:false, side:THREE.DoubleSide,
+    vertexShader:`
+      uniform float uTime, uFlap; varying vec2 vUv; varying float vK;
+      void main(){
+        vUv = uv; vec3 p = position; float k = p.x/6.; vK = k;
+        p.y += sin(uTime*uFlap - k*2.2)*k*k*1.1;
+        p.z += sin(uTime*uFlap*.5 + k*3.)*k*.25 - k*.9;
+        gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.);
+      }`,
+    fragmentShader:`
+      uniform sampler2D uMap; uniform float uShow, uPower, uTime; varying vec2 vUv; varying float vK;
+      void main(){
+        vec4 c = texture2D(uMap, vUv); if (c.a < .03) discard;
+        float pulse = .5+.5*sin(uTime*3. - vK*4.);
+        c.rgb *= .85 + uPower*.4 + pulse*.25;
+        c.rgb += vec3(.6,.05,.05) * pulse * c.r * uPower*.4;
+        gl_FragColor = vec4(c.rgb, c.a*uShow);
+      }`
+  });
+  const wingGeo = new THREE.PlaneGeometry(6, 3.75, 30, 16); wingGeo.translate(3, 1.875, 0);
+  const wingL = new THREE.Group(), wingR = new THREE.Group();
+  const wlM = new THREE.Mesh(wingGeo, wingMat); wlM.scale.x = -1; wingL.add(wlM);
+  const wrM = new THREE.Mesh(wingGeo, wingMat); wingR.add(wrM);
+  wingL.position.set(-.9,-.5,-1.3); wingR.position.set(.9,-.5,-1.3);
+  wingL.rotation.y = .55; wingR.rotation.y = -.55;
+  coreGroup.add(wingL, wingR);
+
+  /* ---------- Writhing demonic qi behind the core ---------- */
+  const qiMat = new THREE.ShaderMaterial({
+    uniforms:{uTime:{value:0}, uPower:{value:0}}, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: noise + `
+      uniform float uTime, uPower; varying vec2 vUv;
+      void main(){
+        vec2 p = (vUv-.5)*2.; float r = length(p);
+        float ang = atan(p.y,p.x);
+        vec2 sw = vec2(cos(ang + r*2.5 - uTime*.3), sin(ang + r*2.5 - uTime*.3))*r;   // spiral warp
+        float n  = snoise(vec3(sw*1.8, uTime*.25));
+        float n2 = snoise(vec3(p*3.6 + 5., -uTime*.45));
+        float v = n*.7 + n2*.3;
+        float tend = pow(1. - abs(sin(v*6.283 + uTime*.6)), 7.);
+        float body = smoothstep(.05,.75,v)*.3;
+        float mask = smoothstep(1.,.2,r) * smoothstep(.0,.25,r);
+        vec3 col = vec3(.45,.02,.05)*body + vec3(1.,.28,.1)*tend*(.5+min(uPower,2.)*.5);
+        gl_FragColor = vec4(col, (body+tend)*mask*(.45+min(uPower,2.)*.4));
+      }`
+  });
+  const qi = new THREE.Mesh(new THREE.PlaneGeometry(17,17), qiMat);
+  qi.position.z = -2.4; coreGroup.add(qi);
+
+  /* ---------- Lightning arcs between the core and its rune rings ---------- */
+  const ARC_N = 14, ARC_S = 9;
+  const arcGeo = new THREE.BufferGeometry();
+  const arcPos = new Float32Array(ARC_N*(ARC_S-1)*2*3);
+  arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPos,3));
+  const arcs = new THREE.LineSegments(arcGeo, new THREE.LineBasicMaterial({color:0xff8a4a, transparent:true, opacity:.9, blending:THREE.AdditiveBlending, depthWrite:false}));
+  coreGroup.add(arcs);
+  const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
+  let arcFrame = 0;
+  function rebuildArcs(count){
+    let k = 0;
+    for (let i=0;i<count;i++){
+      randDir(_a).multiplyScalar(1.55*core.scale.x);
+      _b.copy(_a).normalize().add(randDir(_d).multiplyScalar(.5)).normalize().multiplyScalar(R(2.5,4.3));
+      let px=_a.x, py=_a.y, pz=_a.z;
+      for (let s=1;s<ARC_S;s++){
+        const u = s/(ARC_S-1), j = Math.sin(Math.PI*u)*.4;
+        _c.lerpVectors(_a,_b,u).add(randDir(_d).multiplyScalar(R(0,j)));
+        arcPos[k++]=px; arcPos[k++]=py; arcPos[k++]=pz;
+        arcPos[k++]=_c.x; arcPos[k++]=_c.y; arcPos[k++]=_c.z;
+        px=_c.x; py=_c.y; pz=_c.z;
+      }
+    }
+    arcGeo.setDrawRange(0, count*(ARC_S-1)*2);
+    arcGeo.attributes.position.needsUpdate = true;
+  }
+
+  /* ---------- Sigil: a two-layer magic circle beneath the core ---------- */
+  function sigilTexture(inner){
+    const c = document.createElement('canvas'); c.width = c.height = 1024;
+    const g = c.getContext('2d'); g.translate(512,512);
+    g.strokeStyle = '#ff2e2e'; g.fillStyle = '#ff2e2e'; g.shadowColor = '#ff2e2e'; g.shadowBlur = 14; g.lineCap = 'round';
+    const circ = (r,w)=>{ g.lineWidth = w; g.beginPath(); g.arc(0,0,r,0,Math.PI*2); g.stroke(); };
+    if (!inner){
+      circ(500,4); circ(468,1.5); circ(392,2.5);
+      g.lineWidth = 2;
+      for (let i=0;i<72;i++){ const a=i*Math.PI/36, l = i%6 ? 12 : 30; g.beginPath(); g.moveTo(Math.cos(a)*468, Math.sin(a)*468); g.lineTo(Math.cos(a)*(468+l), Math.sin(a)*(468+l)); g.stroke(); }
+      const text = '天魔神敎血海屍山萬魔歸宗唯我獨尊天上天下魔道無悔';
+      g.font = '46px "Ma Shan Zheng", serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      for (let i=0;i<text.length;i++){ const a = i/text.length*Math.PI*2; g.save(); g.rotate(a); g.translate(0,-430); g.fillText(text[i],0,0); g.restore(); }
+      for (let i=0;i<12;i++){ const a=i*Math.PI/6; g.beginPath(); g.arc(Math.cos(a)*392, Math.sin(a)*392, 9, 0, Math.PI*2); g.fill(); }
+    } else {
+      circ(360,2.5); circ(150,2); circ(120,1);
+      g.lineWidth = 2.5;
+      g.beginPath();                                   // {7/3} heptagram
+      for (let i=0;i<=7;i++){ const a=-Math.PI/2 + (i*3%7)*Math.PI*2/7; i ? g.lineTo(Math.cos(a)*360,Math.sin(a)*360) : g.moveTo(Math.cos(a)*360,Math.sin(a)*360); }
+      g.stroke();
+      g.lineWidth = 1.2;
+      for (let i=0;i<7;i++){ const a=-Math.PI/2+i*Math.PI*2/7; g.beginPath(); g.moveTo(0,0); g.lineTo(Math.cos(a)*360,Math.sin(a)*360); g.stroke(); }
+      g.font = '150px "Ma Shan Zheng", serif'; g.textAlign='center'; g.textBaseline='middle'; g.shadowBlur = 30;
+      g.fillText('魔', 0, 8);
+      g.font = '40px "Ma Shan Zheng", serif'; g.shadowBlur = 12;
+      '力欲血我殺怨鬼'.split('').forEach((ch,i)=>{ const a=-Math.PI/2+i*Math.PI*2/7; g.fillText(ch, Math.cos(a)*300, Math.sin(a)*300); });
+    }
+    return new THREE.CanvasTexture(c);
+  }
+  function sigilLayer(inner, size){
+    const pivot = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(size,size),
+      new THREE.MeshBasicMaterial({map:sigilTexture(inner), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, opacity:.5}));
+    m.rotation.x = -Math.PI/2; pivot.add(m); pivot.position.y = -2.5;
+    coreGroup.add(pivot); return {pivot, mesh:m};
+  }
+  const sigilO = sigilLayer(false, 7.5), sigilI = sigilLayer(true, 6);
+  if (document.fonts) document.fonts.load('46px "Ma Shan Zheng"').then(()=>{ sigilO.mesh.material.map = sigilTexture(false); sigilI.mesh.material.map = sigilTexture(true); }).catch(()=>{});
+
+  /* ---------- Glyph swarm: hundreds of curses orbiting the core ---------- */
+  const GLYPHS = '魔天血殺滅怨鬼惡咒怒死闇煞禁慾狂';
+  function glyphAtlas(){
+    const c = document.createElement('canvas'); c.width = c.height = 1024;
+    const g = c.getContext('2d'); g.font = '190px "Ma Shan Zheng", serif'; g.textAlign='center'; g.textBaseline='middle';
+    g.fillStyle = '#ff5a40'; g.shadowColor = '#ff1a1a'; g.shadowBlur = 24;
+    for (let i=0;i<16;i++) g.fillText(GLYPHS[i], (i%4)*256+128, Math.floor(i/4)*256+132);
+    return new THREE.CanvasTexture(c);
+  }
+  const SW = RM ? 60 : isMobile ? 160 : 420;
+  const sg = new THREE.BufferGeometry();
+  const sPos = new Float32Array(SW*3), sR = new Float32Array(SW), sOff = new Float32Array(SW), sSp = new Float32Array(SW), sY = new Float32Array(SW), sG = new Float32Array(SW), sSz = new Float32Array(SW);
+  for (let i=0;i<SW;i++){ sR[i]=R(2.2,6.5); sOff[i]=R(0,Math.PI*2); sSp[i]=R(.15,.6)*(Math.random()<.5?1:-1); sY[i]=R(-3,3); sG[i]=Math.floor(Math.random()*16); sSz[i]=R(.35,1.1); }
+  sg.setAttribute('position', new THREE.BufferAttribute(sPos,3));
+  [['aR',sR],['aOff',sOff],['aSpeed',sSp],['aY',sY],['aG',sG],['aSize',sSz]].forEach(([n,a])=>sg.setAttribute(n, new THREE.BufferAttribute(a,1)));
+  const swarmMat = new THREE.ShaderMaterial({
+    uniforms:{uTime:{value:0}, uPower:{value:0}, uPix:{value:renderer.getPixelRatio()}, uMap:{value:glyphAtlas()}},
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    vertexShader:`
+      attribute float aR, aOff, aSpeed, aY, aG, aSize;
+      uniform float uTime, uPower, uPix; varying float vG, vA, vRot;
+      void main(){
+        float pw = min(uPower, 2.2);
+        float a = aOff + uTime*aSpeed*(1.+pw*.9);
+        float r = aR*(1.3 - pw*.3);
+        vec3 p = vec3(cos(a)*r, aY*(1.1-pw*.25) + sin(uTime*.7+aOff)*.5, sin(a)*r);
+        vec4 mv = modelViewMatrix*vec4(p,1.);
+        gl_PointSize = aSize*uPix*95./-mv.z; gl_Position = projectionMatrix*mv;
+        vG = aG; vA = (.3+.7*(.5+.5*sin(uTime*2.+aOff*3.)))*(.55+pw*.35); vRot = uTime*(.4+abs(aSpeed)) + aOff;
+      }`,
+    fragmentShader:`
+      uniform sampler2D uMap; varying float vG, vA, vRot;
+      void main(){
+        vec2 q = gl_PointCoord-.5; float cs=cos(vRot), sn=sin(vRot);
+        q = vec2(q.x*cs-q.y*sn, q.x*sn+q.y*cs)+.5;
+        if (q.x<0.||q.x>1.||q.y<0.||q.y>1.) discard;
+        float col = mod(vG,4.), row = floor(vG/4.);
+        vec4 c = texture2D(uMap, vec2((col+q.x)/4., 1.-(row+q.y)/4.));
+        gl_FragColor = vec4(c.rgb, c.a*vA);
+      }`
+  });
+  const swarm = new THREE.Points(sg, swarmMat); coreGroup.add(swarm);
+  if (document.fonts) document.fonts.load('190px "Ma Shan Zheng"').then(()=>{ swarmMat.uniforms.uMap.value = glyphAtlas(); }).catch(()=>{});
+
+  /* ---------- Blood rain ---------- */
+  const RN = RM ? 200 : isMobile ? 600 : 1600;
+  const rg = new THREE.BufferGeometry();
+  const rp = new Float32Array(RN*3), rOff = new Float32Array(RN), rSp = new Float32Array(RN);
+  for (let i=0;i<RN;i++){ rp[i*3]=R(-22,22); rp[i*3+1]=R(-16,16); rp[i*3+2]=R(-12,4); rOff[i]=R(0,100); rSp[i]=Math.random(); }
+  rg.setAttribute('position', new THREE.BufferAttribute(rp,3));
+  rg.setAttribute('aOff', new THREE.BufferAttribute(rOff,1));
+  rg.setAttribute('aSpeed', new THREE.BufferAttribute(rSp,1));
+  const rainMat = new THREE.ShaderMaterial({
+    uniforms:{uTime:{value:0}, uRain:{value:0}, uPix:{value:renderer.getPixelRatio()}},
+    transparent:true, depthWrite:false,
+    vertexShader:`
+      attribute float aOff, aSpeed; uniform float uTime, uRain, uPix; varying float vA;
+      void main(){
+        vec3 p = position;
+        p.y = mod(p.y - uTime*(13.+aSpeed*9.) + 16., 32.) - 16.;
+        p.x += sin(aOff)*.4;
+        vec4 mv = modelViewMatrix*vec4(p,1.);
+        gl_PointSize = (46.+aSpeed*30.)*uPix/-mv.z; gl_Position = projectionMatrix*mv;
+        vA = uRain * smoothstep(16.,11.,abs(p.y));
+      }`,
+    fragmentShader:`
+      varying float vA;
+      void main(){
+        vec2 q = gl_PointCoord;
+        float a = smoothstep(.13,.0,abs(q.x-.5)) * smoothstep(0.,.3,q.y) * smoothstep(1.,.8,q.y);
+        gl_FragColor = vec4(.6,.01,.04, a*vA*.9);
+      }`
+  });
+  const rain = new THREE.Points(rg, rainMat); scene.add(rain);
+
+  /* ---------- Watching eyes in the mist ---------- */
+  function eyeTexture(){
+    const c = document.createElement('canvas'); c.width = 128; c.height = 64; const g = c.getContext('2d');
+    g.shadowColor = '#ff2020'; g.shadowBlur = 16;
+    g.beginPath(); g.moveTo(8,32); g.quadraticCurveTo(64,-12,120,32); g.quadraticCurveTo(64,76,8,32); g.closePath();
+    const gr = g.createRadialGradient(64,32,2,64,32,44);
+    gr.addColorStop(0,'#ffd0c0'); gr.addColorStop(.25,'#ff3a2a'); gr.addColorStop(.8,'#7a0010'); gr.addColorStop(1,'#300006');
+    g.fillStyle = gr; g.fill();
+    return new THREE.CanvasTexture(c);
+  }
+  function pupilTexture(){
+    const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    g.fillStyle = '#000'; g.beginPath(); g.ellipse(32,32,7,24,0,0,Math.PI*2); g.fill();
+    g.strokeStyle = 'rgba(255,60,60,.7)'; g.lineWidth = 1.5; g.stroke();
+    return new THREE.CanvasTexture(c);
+  }
+  const eyeTex = eyeTexture(), pupilTex = pupilTexture();
+  const EYES = RM ? 2 : isMobile ? 4 : 8;
+  const eyes = [];
+  for (let i=0;i<EYES;i++){
+    const g = new THREE.Group(), parts = [];
+    [-.5,.5].forEach(dx=>{
+      const e = new THREE.Group(); e.position.x = dx;
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({map:eyeTex, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, opacity:0}));
+      glow.scale.set(.95,.48,1);
+      const pupil = new THREE.Sprite(new THREE.SpriteMaterial({map:pupilTex, transparent:true, depthWrite:false, opacity:0}));
+      pupil.scale.set(.42,.42,1); pupil.position.z = .02;
+      e.add(glow, pupil); g.add(e); parts.push({e, glow, pupil});
+    });
+    g.visible = false; scene.add(g);
+    eyes.push({g, parts, state:'hidden', t:R(0,6), fade:0, blink:0, stare:0});
+  }
+  function placeEyes(ey){
+    ey.g.position.set(R(-15,15), R(-3.5,3), R(-16,-8));
+    ey.g.scale.setScalar(R(.7,1.5));
+  }
+  function updateEyes(dt, pw){
+    const want = Math.min(EYES, 2 + Math.floor(Math.min(pw,2)*3));
+    eyes.forEach((ey,i)=>{
+      ey.t -= dt;
+      if (ey.state === 'hidden'){
+        if (ey.t <= 0 && i < want){ placeEyes(ey); ey.state='in'; ey.g.visible = true; ey.fade = 0; cultAudio.whisper(); }
+        return;
+      }
+      if (ey.state === 'in'){ ey.fade += dt*1.1; if (ey.fade >= 1){ ey.fade = 1; ey.state='stare'; ey.t = R(4,9); } }
+      else if (ey.state === 'stare'){ if (ey.t <= 0 || i >= want){ ey.state='out'; } }
+      else if (ey.state === 'out'){ ey.fade -= dt*1.4; if (ey.fade <= 0){ ey.fade = 0; ey.state='hidden'; ey.g.visible=false; ey.t = R(1,7); } }
+      // blink
+      ey.blink -= dt;
+      if (ey.blink < -R(2,6)) ey.blink = .13;
+      const open = ey.blink > 0 ? .06 : 1;
+      const op = ey.fade * (.55 + .45*(.5+.5*Math.sin(performance.now()*.004 + i)));
+      ey.parts.forEach(p=>{
+        p.glow.scale.y = .48*open; p.pupil.scale.y = .42*open;
+        p.glow.material.opacity = op; p.pupil.material.opacity = ey.fade*open;
+        p.pupil.position.x = THREE.MathUtils.clamp(mouse.x*.6 - ey.g.position.x*.012, -.22, .22);
+        p.pupil.position.y = THREE.MathUtils.clamp(-mouse.y*.3, -.1, .1);
+      });
+    });
+  }
+
+  /* ---------- Shockwaves ---------- */
+  const shockTex = (()=>{
+    const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d');
+    g.strokeStyle='rgba(255,90,60,1)'; g.shadowColor='#ff2a2a'; g.shadowBlur=22; g.lineWidth=10;
+    g.beginPath(); g.arc(128,128,100,0,Math.PI*2); g.stroke();
+    g.strokeStyle='rgba(255,230,210,.9)'; g.lineWidth=3; g.shadowBlur=0; g.beginPath(); g.arc(128,128,100,0,Math.PI*2); g.stroke();
+    return new THREE.CanvasTexture(c);
+  })();
+  const shocks = [];
+  for (let i=0;i<5;i++){
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({map:shockTex, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, opacity:0}));
+    s.visible = false; coreGroup.add(s); shocks.push({s, life:1, str:1});
+  }
+  function shock(str=1){
+    const sh = shocks.find(x=>x.life>=1); if (!sh) return;
+    sh.life = 0; sh.str = str; sh.s.visible = true;
+  }
+  function updateShocks(dt){
+    shocks.forEach(sh=>{
+      if (sh.life >= 1) return;
+      sh.life = Math.min(1, sh.life + dt*1.5);
+      const k = 1 - Math.pow(1-sh.life, 2);
+      sh.s.scale.setScalar(2 + k*16*sh.str);
+      sh.s.material.opacity = (1-sh.life)*.9;
+      if (sh.life >= 1) sh.s.visible = false;
+    });
+  }
+  let stormLight = 0;
+
   /* ---------- Scroll keyframes ---------- */
   // per section: camera pos, core x offset, power
   const keys = [
@@ -655,7 +994,7 @@ main.shake{animation:shake .32s linear}
     const span = next ? next.offsetTop - s.offsetTop : s.offsetHeight;
     const f = Math.min(Math.max((mid - s.offsetTop - span*.5)/span, 0), 1);
     scrollT = Math.min(idx + (next ? f : 0), keys.length-1);
-    if (idx !== lastIdx){ if (lastIdx !== -1) cultAudio.section(idx, sections[idx].id); lastIdx = idx; }
+    if (idx !== lastIdx){ if (lastIdx !== -1){ cultAudio.section(idx, sections[idx].id); shock(idx >= 4 ? 1.4 : 1); } lastIdx = idx; }
     document.querySelectorAll('#prog a').forEach((a,i)=>a.classList.toggle('on', i===idx));
   }
   const lerp = (a,b,t)=>a+(b-a)*t;
@@ -762,7 +1101,7 @@ main.shake{animation:shake .32s linear}
   const oathBtn = document.getElementById('oath'), comboEl = document.getElementById('combo');
   const mainEl = document.querySelector('main'), flashEl = document.getElementById('flash');
   let combo = 0, comboTimer = null, sworn = false, inFinale = false;
-  function flash(cls){ flashEl.classList.remove('go','soft'); void flashEl.offsetWidth; flashEl.classList.add(cls); }
+  function flash(cls){ flashEl.classList.remove('go','soft','bolt'); void flashEl.offsetWidth; flashEl.classList.add(cls); }
   function shakeMain(px){
     if (reduceMotion) return;
     mainEl.style.setProperty('--sh', px + 'px');
@@ -898,7 +1237,8 @@ main.shake{animation:shake .32s linear}
       shakeMain(14); camShake = .9;
       zanEl.classList.add('cut');
       // the world cracks open
-      timeScale = 3.2; surge = 3; ringBurst = 1;
+      timeScale = 3.2; surge = 3; ringBurst = 1; stormLight = 1.2;
+      shock(2.2); setTimeout(()=>shock(2.6), 140); setTimeout(()=>shock(3), 300);
       split.active = true; split.target = 1; split.amount = 0;
       core.visible = false; halfA.visible = halfB.visible = cutGlow.visible = true;
       for (let k=0;k<14;k++) setTimeout(()=>{
@@ -948,6 +1288,7 @@ main.shake{animation:shake .32s linear}
     }
 
     splatter(x, y, combo);
+    if (tierUp) shock(1 + ti*.3);
     if (tierUp) for (let k=0;k<2+ti*2;k++)
       setTimeout(()=>splatter(rnd(.08,.92)*innerWidth, rnd(.08,.8)*innerHeight, combo*.6), 80 + k*90);
 
@@ -972,6 +1313,7 @@ main.shake{animation:shake .32s linear}
   const clock = new THREE.Clock();
   const cur = sample(0);
   let lastT = 0, st = 0, emberT = 0;
+  const vignetteEl = document.querySelector('.vignette');
   const _p = new THREE.Vector3();
   function tick(){
     const real = clock.getElapsedTime();
@@ -1040,9 +1382,33 @@ main.shake{animation:shake .32s linear}
     emberT += dt * timeScale;
     emberMat.uniforms.uTime.value = emberT;
     emberMat.uniforms.uSpeed.value = 1 + pw*.6 + surge*4;
-    mists.forEach((m,i)=>{ m.position.x = Math.sin(t*.05+i*1.7)*6; });
+    mists.forEach((m,i)=>{ m.position.x = Math.sin(t*.05+i*1.7)*6; m.material.opacity = .8 + stormLight*.9; });
     mountains.forEach((m,i)=>{ m.position.x = -mouse.x*(i+1)*.8; });
-    moon.material.color.setRGB(.45+pw*.25, .03, .05);
+    moon.material.color.setRGB(.45+pw*.25 + stormLight*.5, .03 + stormLight*.2, .05 + stormLight*.2);
+
+    /* --- demonic layers --- */
+    const pwc = Math.min(pw, 2.5);
+    const flap = 1.1 + pwc*1.6 + surge*3;
+    wingU.uTime.value = t; wingU.uFlap.value = flap; wingU.uPower.value = pwc;
+    wingU.uShow.value = lerp(wingU.uShow.value, Math.min(1, .15 + pwc*.7 + surge*.5), .04);
+    const fl = Math.sin(t*flap)*.3 + .1;
+    wingL.rotation.z = -fl; wingR.rotation.z = fl;
+    wingL.rotation.y = .55 + Math.sin(t*flap*.5)*.12; wingR.rotation.y = -.55 - Math.sin(t*flap*.5)*.12;
+    qiMat.uniforms.uTime.value = t; qiMat.uniforms.uPower.value = pwc;
+    qi.rotation.z = -t*.05;
+    if ((arcFrame++ % 3) === 0) rebuildArcs(Math.max(0, Math.min(ARC_N, Math.floor((pwc-.4)*5 + surge*5))));
+    arcs.material.opacity = .45 + Math.random()*.55;
+    const sgo = .3 + pwc*.3 + surge*.3, sgs = (1 + surge*.6 + ringBurst)*(1 + Math.sin(t*2)*.03);
+    sigilO.pivot.rotation.y = t*.12 + cur.rot*.3;  sigilO.mesh.material.opacity = Math.min(1,sgo); sigilO.pivot.scale.setScalar(sgs);
+    sigilI.pivot.rotation.y = -t*.22 - cur.rot*.5; sigilI.mesh.material.opacity = Math.min(1,sgo+.1); sigilI.pivot.scale.setScalar(sgs);
+    swarmMat.uniforms.uTime.value += dt*timeScale; swarmMat.uniforms.uPower.value = pwc;
+    rainMat.uniforms.uTime.value += dt*timeScale;
+    rainMat.uniforms.uRain.value = Math.min(1, THREE.MathUtils.smoothstep(pwc, .6, 1.05) + surge*.5);
+    updateEyes(dt, pwc);
+    updateShocks(dt*timeScale);
+    stormLight *= .86;
+    renderer.setClearColor(stormLight > .01 ? new THREE.Color(.02+stormLight*.25, .004+stormLight*.03, .008+stormLight*.04) : 0x050102);
+    vignetteEl.style.opacity = Math.min(1, .72 + Math.sin(t*1.7)*.12*pwc + surge*.08);
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
@@ -1064,6 +1430,161 @@ main.shake{animation:shake .32s linear}
     c.addEventListener('pointerleave', ()=>{ c.style.transform=''; });
     c.addEventListener('pointerenter', ()=>cultAudio.hover());
   });
+
+  /* ================= 2D DEMONIC LAYERS ================= */
+
+  /* ---------- Storm: crimson lightning across the sky ---------- */
+  const stc = document.getElementById('storm'), stx = stc.getContext('2d');
+  let bolts = [], stormRunning = false, stormTimer = null;
+  function sizeStorm(){ const d=Math.min(devicePixelRatio,2); stc.width=innerWidth*d; stc.height=innerHeight*d; stx.setTransform(d,0,0,d,0,0); }
+  sizeStorm(); addEventListener('resize', sizeStorm);
+  function jag(ax,ay,bx,by,depth,out){
+    if (!depth){ out.push([bx,by]); return; }
+    const L = Math.hypot(bx-ax,by-ay);
+    const mx = (ax+bx)/2 + (Math.random()-.5)*L*.42, my = (ay+by)/2 + (Math.random()-.5)*L*.3;
+    jag(ax,ay,mx,my,depth-1,out); jag(mx,my,bx,by,depth-1,out);
+  }
+  function makeBolt(big){
+    const W = innerWidth, H = innerHeight;
+    const x0 = R(W*.05, W*.95), y0 = -10, x1 = x0 + R(-W*.25, W*.25), y1 = R(H*.3, H*.65);
+    const main = [[x0,y0]]; jag(x0,y0,x1,y1,6,main);
+    const paths = [{pts:main, w: big ? 3.2 : 2.2}];
+    const nb = big ? 7 : 4;
+    for (let i=0;i<nb;i++){
+      const k = Math.floor(R(4, main.length-6)), [sx0,sy0] = main[k];
+      const ex = sx0 + R(-W*.18, W*.18), ey = sy0 + R(H*.08, H*.28);
+      const b = [[sx0,sy0]]; jag(sx0,sy0,ex,ey,4,b); paths.push({pts:b, w:R(.8,1.5)});
+      if (Math.random()<.5){ const j = Math.floor(R(3,b.length-3)), [bx0,by0]=b[j]; const bb=[[bx0,by0]]; jag(bx0,by0,bx0+R(-W*.08,W*.08),by0+R(H*.04,H*.14),3,bb); paths.push({pts:bb, w:.7}); }
+    }
+    bolts.push({paths, t0:performance.now(), life: big ? 520 : 380});
+    if (!stormRunning){ stormRunning = true; requestAnimationFrame(stormLoop); }
+  }
+  function strokePaths(b, alpha){
+    b.paths.forEach(p=>{
+      stx.beginPath(); p.pts.forEach((q,i)=> i ? stx.lineTo(q[0],q[1]) : stx.moveTo(q[0],q[1]));
+      stx.shadowBlur = 34; stx.shadowColor = 'rgba(255,20,30,1)';
+      stx.strokeStyle = `rgba(255,50,50,${alpha*.55})`; stx.lineWidth = p.w*5; stx.stroke();
+      stx.shadowBlur = 0;
+      stx.strokeStyle = `rgba(255,232,228,${alpha})`; stx.lineWidth = p.w; stx.stroke();
+    });
+  }
+  function stormLoop(now){
+    stx.clearRect(0,0,innerWidth,innerHeight);
+    stx.globalCompositeOperation = 'lighter'; stx.lineCap='round'; stx.lineJoin='round';
+    for (let i=bolts.length-1;i>=0;i--){
+      const b = bolts[i], el = now - b.t0;
+      if (el > b.life){ bolts.splice(i,1); continue; }
+      const flick = el < 110 ? (Math.floor(el/28)%2 ? 1 : .45) : 1;
+      strokePaths(b, flick * (1 - Math.max(0, el-110)/(b.life-110)));
+    }
+    stx.globalCompositeOperation = 'source-over';
+    if (bolts.length) requestAnimationFrame(stormLoop);
+    else { stormRunning = false; stx.clearRect(0,0,innerWidth,innerHeight); }
+  }
+  function strike(big){
+    if (document.hidden) return;
+    makeBolt(big);
+    if (big && Math.random()<.6) setTimeout(()=>makeBolt(false), R(90,220));
+    stormLight = big ? 1 : .55;
+    flash('bolt');
+    camShake = Math.max(camShake, big ? .18 : .08);
+    const dist = big ? R(.05,.35) : R(.35,.9);
+    setTimeout(()=>cultAudio.thunder(dist), 120 + dist*900);
+  }
+  function scheduleStorm(){
+    const pwNow = Math.min(cur.power + surge, 2.2);
+    stormTimer = setTimeout(()=>{
+      if (!reduceMotion) strike(Math.random() < .25 + pwNow*.25);
+      scheduleStorm();
+    }, R(4500, 13000) / (1 + pwNow));
+  }
+  scheduleStorm();
+
+  /* ---------- Cursor: a trail of demonic qi ---------- */
+  const qc = document.getElementById('qi'), qx = qc.getContext('2d');
+  const canHover = matchMedia('(hover:hover)').matches && !reduceMotion;
+  let wisps = [], ghosts = [], ribbon = [], qiRunning = false, lastQ = [0,0];
+  function sizeQi(){ const d=Math.min(devicePixelRatio,2); qc.width=innerWidth*d; qc.height=innerHeight*d; qx.setTransform(d,0,0,d,0,0); }
+  sizeQi(); addEventListener('resize', sizeQi);
+  if (canHover) addEventListener('pointermove', e=>{
+    const dx = e.clientX-lastQ[0], dy = e.clientY-lastQ[1], d = Math.hypot(dx,dy);
+    if (d < 5) return;
+    lastQ = [e.clientX, e.clientY];
+    ribbon.push({x:e.clientX, y:e.clientY, t:performance.now()}); if (ribbon.length > 26) ribbon.shift();
+    const n = Math.min(3, 1 + d/18);
+    for (let i=0;i<n;i++) wisps.push({x:e.clientX+R(-4,4), y:e.clientY+R(-4,4), r:R(9,22), vx:dx*.04+R(-.35,.35), vy:-R(.3,1.2)+dy*.02, life:1, decay:R(.014,.03)});
+    if (Math.random() < .09 + Math.min(cur.power,1.5)*.06) ghosts.push({ch:GLYPHS[Math.floor(Math.random()*16)], x:e.clientX, y:e.clientY, rot:R(-.5,.5), s:R(18,34), life:1, vy:-R(.2,.6)});
+    if (!qiRunning){ qiRunning = true; requestAnimationFrame(qiLoop); }
+  });
+  function qiLoop(now){
+    qx.clearRect(0,0,innerWidth,innerHeight);
+    // smoke
+    for (let i=wisps.length-1;i>=0;i--){
+      const w = wisps[i]; w.x += w.vx; w.y += w.vy; w.r += .35; w.life -= w.decay;
+      if (w.life <= 0){ wisps.splice(i,1); continue; }
+      const g = qx.createRadialGradient(w.x,w.y,0,w.x,w.y,w.r);
+      g.addColorStop(0, `rgba(120,0,14,${w.life*.55})`); g.addColorStop(.6, `rgba(40,0,6,${w.life*.3})`); g.addColorStop(1,'rgba(0,0,0,0)');
+      qx.fillStyle = g; qx.beginPath(); qx.arc(w.x,w.y,w.r,0,Math.PI*2); qx.fill();
+    }
+    qx.globalCompositeOperation = 'lighter';
+    // ribbon
+    ribbon = ribbon.filter(p => now - p.t < 420);
+    if (ribbon.length > 2){
+      qx.lineCap = 'round'; qx.lineJoin = 'round';
+      for (let i=1;i<ribbon.length;i++){
+        const a = ribbon[i-1], b = ribbon[i], k = i/ribbon.length, age = 1 - (now-b.t)/420;
+        qx.strokeStyle = `rgba(255,40,40,${age*k*.7})`; qx.lineWidth = 1 + k*5;
+        qx.shadowBlur = 14; qx.shadowColor = 'rgba(255,0,30,.9)';
+        qx.beginPath(); qx.moveTo(a.x,a.y); qx.lineTo(b.x,b.y); qx.stroke();
+      }
+      qx.shadowBlur = 0;
+    }
+    // glyph afterimages
+    qx.textAlign = 'center'; qx.textBaseline = 'middle';
+    for (let i=ghosts.length-1;i>=0;i--){
+      const g = ghosts[i]; g.y += g.vy; g.life -= .022; g.s += .25;
+      if (g.life <= 0){ ghosts.splice(i,1); continue; }
+      qx.save(); qx.translate(g.x,g.y); qx.rotate(g.rot);
+      qx.font = `${g.s}px "Ma Shan Zheng", serif`;
+      qx.shadowBlur = 16; qx.shadowColor = 'rgba(255,0,30,1)';
+      qx.fillStyle = `rgba(255,60,50,${g.life})`; qx.fillText(g.ch,0,0); qx.restore();
+    }
+    qx.globalCompositeOperation = 'source-over';
+    if (wisps.length || ghosts.length || ribbon.length) requestAnimationFrame(qiLoop);
+    else { qiRunning = false; qx.clearRect(0,0,innerWidth,innerHeight); }
+  }
+
+  /* ---------- Corruption: headings glitch and letters turn demonic ---------- */
+  const corruptTargets = [...document.querySelectorAll('h2, .hero-han, .creed-han, .title-han, .kicker, .card h3, .art h3, .tier b, .tab-body h3')];
+  const CURSE = '魔血殺鬼';
+  function corruptOnce(){
+    const vis = corruptTargets.filter(el=>{ const r=el.getBoundingClientRect(); return r.bottom>0 && r.top<innerHeight && r.width; });
+    if (!vis.length) return;
+    const el = vis[Math.floor(Math.random()*vis.length)];
+    el.classList.remove('corrupt'); void el.offsetWidth; el.classList.add('corrupt');
+    setTimeout(()=>el.classList.remove('corrupt'), 450);
+    // swap a few characters for curses, then put them back
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes = []; let n; while ((n = walker.nextNode())) if (n.nodeValue.trim().length > 2 && !n._cursed) nodes.push(n);
+    if (!nodes.length) return;
+    const swaps = 1 + Math.floor(Math.min(cur.power,1.5)*2);
+    for (let s=0;s<swaps;s++){
+      const node = nodes[Math.floor(Math.random()*nodes.length)];
+      if (node._cursed) continue;
+      const orig = node.nodeValue, i = Math.floor(Math.random()*orig.length);
+      if (orig[i] === ' ') continue;
+      const span = document.createElement('span'); span.className = 'corrupt-char'; span.textContent = CURSE[Math.floor(Math.random()*CURSE.length)];
+      const after = node.splitText(i); after.nodeValue = after.nodeValue.slice(1);
+      node.parentNode.insertBefore(span, after);
+      node._cursed = after._cursed = true;
+      setTimeout(()=>{ span.replaceWith(document.createTextNode(orig[i])); node.parentNode && node.parentNode.normalize(); node._cursed = after._cursed = false; }, R(70,160)+s*60);
+    }
+  }
+  function scheduleCorrupt(){
+    setTimeout(()=>{ if (!reduceMotion && !document.hidden) corruptOnce(); scheduleCorrupt(); }, R(1800,6500)/(1+Math.min(cur.power+surge,2.5)));
+  }
+  scheduleCorrupt();
+  window.cultFx = { strike, corrupt: corruptOnce, shock };   // console playground
 
   /* ---------- Doctrines: the Nine Laws ---------- */
   const LAWS = [
